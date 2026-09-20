@@ -1,0 +1,10 @@
+{
+  "name": "ai-native-project-framework",
+  "version": "0.1.0",
+  "schema_version": 1,
+  "reviewed_on": "2026-09-20",
+  "profiles": ["lean", "product", "platform"],
+  "snapshot_paths": ["docs", "profiles", "templates/artifacts", "examples", "VERSION", "CHANGELOG.md", "CONTEXT.md", "framework.json"],
+  "snapshot_tools": ["scripts/check_framework.py"],
+  "project_template": "templates/project"
+}
