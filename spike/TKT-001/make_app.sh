@@ -31,7 +31,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 
 if command -v codesign >/dev/null 2>&1; then
-	codesign --force -s - "$APP" && echo "[sign] ad-hoc 签名成功"
+	xattr -cr "$APP" 2>/dev/null || true
+	codesign --force -s "AppSwitcher Dev" "$APP" && echo "[sign] 自签名（AppSwitcher Dev）成功"
 else
 	echo "[sign] 无 codesign，跳过（.app 仍可运行，但授权可能不稳）"
 fi
