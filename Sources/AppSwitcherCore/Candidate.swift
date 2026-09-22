@@ -7,6 +7,8 @@ public struct Candidate: Hashable, Identifiable, Sendable {
     public let id: String
     public let groupID: String
     public let displayName: String
+    /// 窗口标题（副标题）；单窗口/无标题为空。
+    public let title: String
     public let activationCount: Int
     public let lastActivatedAt: Date
 
@@ -14,12 +16,14 @@ public struct Candidate: Hashable, Identifiable, Sendable {
         id: String,
         groupID: String,
         displayName: String,
+        title: String = "",
         activationCount: Int = 0,
         lastActivatedAt: Date = .distantPast
     ) {
         self.id = id
         self.groupID = groupID
         self.displayName = displayName
+        self.title = title
         self.activationCount = activationCount
         self.lastActivatedAt = lastActivatedAt
     }

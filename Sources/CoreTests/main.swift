@@ -112,10 +112,67 @@ func testAppRanker() {
     )
 }
 
+// MARK: - WindowFilter
+
+@MainActor
+func testWindowFilter() {
+    print("WindowFilter 窗口过滤")
+
+    func w(_ layer: Int = 0, alpha: Double = 1, width: Double = 800, height: Double = 600) -> WindowDescriptor {
+        WindowDescriptor(pid: 1, title: "", windowNumber: 1, layer: layer, alpha: alpha, width: width, height: height)
+    }
+
+    check(WindowFilter.isContent(w()), "普通窗口通过")
+    check(!WindowFilter.isContent(w(3)), "非 layer0 排除")
+    check(!WindowFilter.isContent(w(alpha: 0)), "全透明排除")
+    check(!WindowFilter.isContent(w(width: 64, height: 64)), "小窗排除")
+    check(!WindowFilter.isContent(w(width: 1512, height: 33)), "菜单栏条排除")
+    check(!WindowFilter.isContent(w(width: 500, height: 500)), "500x500 占位窗排除")
+}
+
+// MARK: - CandidateFactory
+
+@MainActor
+func testCandidateFactory() {
+    print("CandidateFactory 候选构建")
+
+    let apps = [
+        AppDescriptor(pid: 1, bundleIdentifier: "com.a.chrome", displayName: "Chrome"),
+        AppDescriptor(pid: 2, bundleIdentifier: "com.a.codex", displayName: "ChatGPT"),
+        AppDescriptor(pid: 3, bundleIdentifier: "com.a.menubar", displayName: "MenuBarTool"),
+    ]
+    let windows = [
+        WindowDescriptor(pid: 1, title: "Doc", windowNumber: 101, layer: 0, alpha: 1, width: 800, height: 600),
+        WindowDescriptor(pid: 1, title: "Mail", windowNumber: 102, layer: 0, alpha: 1, width: 800, height: 600),
+        WindowDescriptor(pid: 2, title: "", windowNumber: 201, layer: 0, alpha: 1, width: 800, height: 600),
+        WindowDescriptor(pid: 2, title: "", windowNumber: 202, layer: 0, alpha: 1, width: 800, height: 600),
+        WindowDescriptor(pid: 2, title: "", windowNumber: 203, layer: 0, alpha: 1, width: 800, height: 600),
+        WindowDescriptor(pid: 3, title: "", windowNumber: 301, layer: 0, alpha: 1, width: 500, height: 500),
+    ]
+    let usage = ["com.a.chrome": UsageStats(activationCount: 5, lastActivatedAt: Date())]
+
+    let candidates = CandidateFactory.makeCandidates(apps: apps, windows: windows, usage: usage)
+
+    check(candidates.count == 5, "只保留有内容窗口的 app（菜单栏工具排除）")
+
+    let chrome = candidates.filter { $0.groupID == "com.a.chrome" }
+    check(chrome.count == 2, "Chrome 两个窗口展开为 2 条")
+    check(chrome.allSatisfy { $0.activationCount == 5 }, "Chrome 使用统计合并")
+
+    let codex = candidates.filter { $0.groupID == "com.a.codex" }
+    check(codex.count == 3, "codex 三个窗口展开为 3 条")
+    check(codex.map(\.title) == ["窗口 1", "窗口 2", "窗口 3"], "无标题多窗口降级为「窗口 N」")
+
+    let chromeTitles = chrome.map(\.title).sorted()
+    check(chromeTitles == ["Doc", "Mail"], "有标题窗口使用真实标题")
+}
+
 // MARK: - 运行
 
 testKeyAssigner()
 testAppRanker()
+testWindowFilter()
+testCandidateFactory()
 
 print("")
 if failCount == 0 {

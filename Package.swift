@@ -9,8 +9,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "AppSwitcherCore"),
+        .target(name: "AppSwitcherKit", dependencies: ["AppSwitcherCore"]),
         // 无 Xcode 时 XCTest/Swift Testing 不可用，用最小测试运行器（可执行目标）替代，
         // 装 Xcode 后可无缝换成 Swift Testing。
-        .executableTarget(name: "CoreTests", dependencies: ["AppSwitcherCore"]),
+        .executableTarget(name: "CoreTests", dependencies: ["AppSwitcherCore", "AppSwitcherKit"]),
     ]
 )
