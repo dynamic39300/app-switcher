@@ -33,9 +33,11 @@ upstream: [SPEC-001]
 
 | 项 | 状态 |
 | --- | --- |
-| SPEC-001 | draft（未 accepted） |
-| TKT-001 至 TKT-008 | backlog（未 ready） |
-| TEST-001 至 TEST-010 | 待执行 |
-| 发布记录 | 待产生 |
+| SPEC-001 | draft（行为基线；AC-02 已按 spike 校准） |
+| TKT-001~005、TKT-007 | done |
+| TKT-006 | in-progress（热键配置 UI 遗留） |
+| TKT-008 | in-progress（待 owner 端到端验收） |
+| TEST-001 至 TEST-010 | 单测部分（AC-02/03/04）已覆盖；端到端人工用例待验收 |
+| 发布记录 | REL-001 状态 ready |
 
 规格接受、任务完成与版本发布是不同状态；本矩阵不充当任何「已实现/已验证」的证明。

@@ -1,6 +1,6 @@
 ---
 id: REL-001
-status: planned
+status: ready
 owner: "AppSwitcher 项目 owner（待填姓名）"
 upstream: [SPEC-001]
 ---
@@ -11,30 +11,32 @@ upstream: [SPEC-001]
 
 ## 版本与范围
 
-- 源 commit、制品不可变标识：待产生（TKT-007 打包后填）。
-- 依赖/配置/数据迁移版本：V1 无网络、无服务端；本地 `usage.json` 无迁移。
-- 对应 Tickets 与 AC：TKT-001 至 TKT-008；AC-01 至 AC-10。
-- 用户可见变化：全新本地工具，无兼容影响。不包含：窗口级切换、手动固定、Hold、切 Space。
+- 源 commit：见 git 历史（TKT-001 `c9e8053` → TKT-002 `9e2f893` → TKT-003 `072407d` → TKT-004/005/007 本次提交）。
+- 制品：`build/AppSwitcher.app`（SwiftPM release 构建 + 自签名 `AppSwitcher Dev`）。
+- 版本：0.1.0；bundle id `com.appswitcher.app`；macOS 15+；Apple Silicon。
+- 对应 Tickets 与 AC：TKT-001~007；AC-01~AC-10（AC-09 热键配置 UI 部分未完成）。
+- 用户可见变化：全新本地工具。不包含：窗口真实标题（需屏幕录制 + Developer ID 签名）、热键配置 UI、中文名首字母映射。
 
 ## 发布条件与授权
 
-- 环境：本机（个人使用，ad-hoc 签名）。
-- 操作人、授权范围：仅本人；无对外分发授权。
-- 必要审阅/证据：QA-001 全部适用用例有真实结果；AC-05/AC-08 有 spike 结论支撑。
-- 发布窗口/渐进批次/特性开关：不适用（单机）。
+- 环境：本机（个人使用）。操作人：owner 本人。无对外分发授权。
+- 必要审阅/证据：`swift run CoreTests` 29 项通过；`.app` 启动成功、热键注册=true。
+- 权限：辅助功能（已授权）；屏幕录制（可选，用于窗口真实标题，当前自签名不可得 → 降级「窗口 N」）。
 
 ## 操作与恢复
 
-- 发布：把 `.app` 放入 `/Applications` 并启动。
-- 观察：切换成功率、覆盖层延迟、跨桌面回弹情况（个人自测）。
-- 恢复：删除 `.app` 即移除；无数据/外部副作用。无回滚概念。
+- 启动：`open build/AppSwitcher.app`（菜单栏 agent，无 Dock 图标）；菜单栏图标菜单可退出。
+- 打包：`./scripts/build_app.sh`。
+- 单测：`swift run CoreTests`。
+- 恢复：菜单栏「退出 AppSwitcher」或 `pkill -f AppSwitcher`；删除 `build/AppSwitcher.app` 即移除，无数据/外部副作用。
 
 ## 验收证据
 
 | 阶段 | 版本/环境/操作者/时间 | 真实结果 | 证据/问题 |
 | --- | --- | --- | --- |
-| 候选验证 | 待执行 | 待执行 | 待产生 |
-| 部署 | 待执行 | 待执行 | 待产生 |
-| 上线后关键旅程与观察 | 待执行 | 待执行 | 待产生 |
+| 候选验证 | macOS 26.6.2 / CLT Swift 6.3.3 / 2026-09-20 | `swift run CoreTests` 29 项全通过 | 输出「✅ 全部通过：29 项」 |
+| 构建 | 同上 | `swift build` + `build_app.sh` 成功，自签名成功 | `build/AppSwitcher.app` 生成 |
+| 启动 | 同上 | `open` 启动成功，`[main] AppSwitcher 0.1.0 启动，热键 ⌃⌥+Space 注册=true` | 日志 `/tmp/appswitcher.log` |
+| 上线后关键旅程 | 待 owner 验收 | 待执行：热键唤出覆盖层、按键切换、Esc 取消、跨桌面 | 待产生 |
 
-状态链：`planned → ready → released → verified`。未上线不得填 released/verified。
+状态链：`planned → ready → released → verified`。当前 `ready`，owner 端到端验收后置 `released/verified`。
