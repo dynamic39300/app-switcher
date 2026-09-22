@@ -1,16 +1,15 @@
 # 命令索引
 
-本文件记录命令来源和验证状态。业务工具尚未配置，不执行猜测的安装、测试或部署命令。
+本文件记录命令来源和验证状态。
 
 | 操作 | 实际命令/来源 | 验证状态 |
 | --- | --- | --- |
-| 文档与快照检查 | `python3 .framework/scripts/check_framework.py --root .` | 生成器提供；本项目已执行，0 错误 |
-| 安装 | Xcode 工程依赖（无第三方包，待 TKT-002 建立） | 未配置 |
-| 本地开发 | `xcodebuild` / Xcode Run（待 TKT-002 建立工程） | 未配置 |
-| 格式/静态分析/类型 | SwiftFormat / SwiftLint / `swift build`（待选型落地） | 未配置 |
-| 单元/集成/合同测试 | `xcodebuild test` 或 Swift Testing（待 TKT-002） | 未配置 |
-| E2E/无障碍/性能/eval | 手动端到端用例见 [QA-001](../features/FEAT-001-app-switcher/test-plan.md) | 未配置 |
-| 构建/发行包 | `xcodebuild archive`（ad-hoc 签名，TKT-007） | 未配置 |
-| 发布/迁移/回退 | 个人使用，无服务端；发布记录见 feature 目录 | 未配置 |
+| 文档与快照检查 | `python3 .framework/scripts/check_framework.py --root .` | 已执行，0 错误 |
+| 构建（Domain 库） | `swift build`（SwiftPM + CLT） | 已执行 |
+| 单元测试 | `swift run CoreTests`（最小测试运行器） | 已执行，17 项通过 |
+| 格式/静态分析/类型 | swift-format / SwiftLint（待接入） | 未配置 |
+| spike 打包 .app | `spike/TKT-001/make_app.sh`（手工壳 + 自签名） | spike 验证通过 |
+| 正式 .app 打包/签名/公证 | 待装 Xcode + Developer ID | 未配置 |
+| 发布/分发 | 待装 Xcode + Apple 开发者账号 | 未配置 |
 
-选型完成后，每项填写执行目录、工具/版本来源、必要变量名称、预期结果与最近核验。秘密值不入库。CI 必需检查在仓库平台设置中实际启用；此模板不会启用分支保护。
+说明：无 Xcode 时 XCTest/Swift Testing 均不可用（XCTest 需 Xcode；Swift Testing 宏需编译器插件），单测走 `swift run CoreTests`。装 Xcode 后可将 `Sources/CoreTests/main.swift` 的测试逻辑平移为 Swift Testing。秘密值不入库。CI 检查需在仓库平台实际启用。

@@ -14,13 +14,14 @@ upstream: [SPEC-001]
 | 能力 | 候选 | 选择 | 理由与退出条件 |
 | --- | --- | --- | --- |
 | 语言/框架 | SwiftUI / AppKit / Electron / Tauri | Swift + SwiftUI（UI）+ AppKit（窗口/热键/AX） | 原生 Apple Silicon、权限 API 直连；所有参考实现均为 Swift；Electron/Tauri 无法干净地做全局热键与非激活覆盖层且资源重。退出条件：若覆盖层窗口行为在 Swift 下无法达成则评估 AppKit 纯实现 |
-| 工程 | Xcode 项目 / SPM 可执行 | Xcode 原生 App | 后续签名/公证/打包链路标准；SPM 打包需自搭。退出条件：无 |
+| 工程 | Xcode 项目 / SwiftPM | **SwiftPM + CLT**（Domain 库 + 最小测试运行器）；Xcode 留到打包/签名阶段再装 | spike 证实 CLT+SwiftPM 可完成开发与单测（XCTest/Swift Testing 需 Xcode）；正式 .app 打包仍需 Xcode。退出条件：无 |
 | 应用形态 | Dock App / 菜单栏 Agent | 菜单栏 Agent（`LSUIElement=true`） | 常驻、无 Dock 图标、符合「后台切换器」定位 |
-| 全局热键 | Carbon `RegisterEventHotKey` / NSEvent 全局监视器 | Carbon `RegisterEventHotKey` | 无需辅助功能即可注册、低开销；返回错误即可做冲突检测。退出条件：macOS 26 行为异常则退 NSEvent |
-| 激活 app | `NSRunningApplication.activate` / AX `kAXRaiseAction` | 两者分层：先 activate，失败/跨桌面用 AX 兜底 | 跨桌面可靠置前需要 AX（辅助功能）。spike 实测选最终主路径 |
-| 覆盖层窗口 | `NSPanel`(.nonactivatingPanel) / NSWindow | `NSPanel` 非激活面板 | 不抢焦点、能收按键、可设 `collectionBehavior` 覆盖所有 Space |
-| 签名 | 无 / ad-hoc / Developer ID | V1 ad-hoc（Sign to Run Locally） | 仅本人使用；签名/公证/自动更新预留为后装扩展点，不阻塞 V1 |
+| 全局热键 | Carbon `RegisterEventHotKey` / NSEvent 全局监视器 | Carbon `RegisterEventHotKey` | 无需辅助功能即可注册、低开销；返回错误即可做冲突检测。**spike 证实：必须打包成 .app 才能收到 Carbon 热键事件（裸二进制收不到）** |
+| 激活 app | `NSRunningApplication.activate` / AX `kAXRaiseAction` | 两者分层：activate + AX setFrontmost + 还原最小化 + 抬起窗口 | 跨桌面可靠置前需要 AX（辅助功能）；最小化窗口需显式 `AXMinimized` 还原。spike 已实测通过 |
+| 覆盖层窗口 | `NSPanel` 非激活 / 激活 | `NSPanel` 可激活面板，显示时 `NSApp.activate` 短暂成为前台以接收按键，取消时恢复原前台 | 非激活面板不抢焦点→字母漏进原输入框；必须让本进程短暂前台才能吃按键。spike 已实测 |
+| 签名 | 无 / ad-hoc / 自签名 / Developer ID | 开发期自签名（`AppSwitcher Dev`）；分发用 Developer ID | 屏幕录制权限在 macOS 26 强制要求 TeamIdentifier，ad-hoc/自签名均拿不到；需 Developer ID（装 Xcode + Apple 账号） |
 | 使用统计 | 无 / 轮询 frontmost / 事件 | 低频轮询 `NSWorkspace.frontmostApplication`（约 1s） | 无需屏幕录制即可获得「当前 app 身份」，用于 rank；纯本地 |
+| 窗口枚举/标题 | AX / CGWindowList | **CGWindowList**（窗口归属/尺寸）+ `kCGWindowName` 读标题 | AX 对 Chromium（Chrome/codex）返回 0 窗口，不可靠；CGWindowList 可靠，但读标题需屏幕录制（见签名行）。无屏幕录制时降级「窗口 N」序号 |
 
 ## 模块、数据与信任边界
 
@@ -110,4 +111,17 @@ flowchart LR
 - 前置契约：`AppCandidate`/`Key`/`KeyAssigner` 接口先定（纯 Swift，无平台依赖），供 Provider/UI 并行。
 - 风险 spike 先行：TKT-001 验证权限、热键、激活、覆盖层四件事的可行性，结论回填本设计与 SPEC-001。
 - 切片与依赖见 [TASKS-001](tasks.md)；可并行项（Domain 单测、UI 快照、Provider 适配）在契约冻结后并行。
-- 验收证据：当前无已运行原型/实验；spike、单测、UI 快照、端到端均待执行。技术审阅结论及回填 SPEC 的变更待补。
+
+## TKT-001 spike 结论回填
+
+已在真实环境（macOS 26.6.2 / Apple Silicon / CLT Swift 6.3.3）实测：
+
+1. **热键必须打包成 .app**：裸可执行文件收不到 Carbon 热键事件；手工 .app 壳（Info.plist + 二进制 + 签名）即可解决。
+2. **覆盖层必须短暂激活**：非激活面板不抢焦点，字母会漏进原输入框；需 `NSApp.activate` + 可成为 key 的 panel，取消时恢复原前台。
+3. **窗口过滤**：用 `CGWindowList`（layer==0 + 尺寸阈值，排除菜单栏条 33px 与 500×500 占位窗），零额外权限，正确排除后台/菜单栏 app。
+4. **多窗口平铺**：用 `CGWindowList` 枚举（可靠）；同 App 多窗口展开为相邻键位。AX 枚举对 Chromium（Chrome/codex）返回 0，不可依赖。
+5. **窗口标题受签名限制**：`kCGWindowName` 需屏幕录制；macOS 26 强制 TeamIdentifier，ad-hoc/自签名均拿不到。**无屏幕录制时降级为「窗口 N」序号**（已实现）。
+6. **中文名**：首字母映射对中文显示名失效，需拼音/英文名兜底（列入后续 ticket，不在 V1）。
+7. **最小化 app**：激活需显式 `AXMinimized` 还原，否则无窗口显示。
+
+- 验收证据：spike 可运行、覆盖层/热键/激活/多窗口平铺均人工验证；Domain 单测 `swift run CoreTests` 17 项通过（最小测试运行器，无 Xcode）。技术审阅与发布前完整验收待 TKT-003 之后。
