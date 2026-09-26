@@ -14,3 +14,13 @@ coverage/
 .swiftpm/
 DerivedData/
 *.xcuserstate
+
+# Commercial service runtime, credentials and local test databases
+web/.runtime/
+web/staticfiles/
+.ruff_cache/
+*.sqlite3
+*.sqlite3-*
+*.pem
+*.p12
+*.p8

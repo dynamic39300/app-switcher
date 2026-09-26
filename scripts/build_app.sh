@@ -1,40 +1,47 @@
 #!/bin/bash
-# 构建 AppSwitcher 可执行文件并打包成 .app 壳（菜单栏 agent + 签名）。
-set -e
+# Build a local or explicitly configured distribution bundle. Never silently downgrade distribution signing.
+set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release --product AppSwitcherApp
-
-APP="build/AppSwitcher.app"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
-cp .build/release/AppSwitcherApp "$APP/Contents/MacOS/AppSwitcher"
-
-cat > "$APP/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>CFBundleName</key><string>AppSwitcher</string>
-	<key>CFBundleDisplayName</key><string>AppSwitcher</string>
-	<key>CFBundleIdentifier</key><string>com.appswitcher.app</string>
-	<key>CFBundleVersion</key><string>0.1.0</string>
-	<key>CFBundleShortVersionString</key><string>0.1.0</string>
-	<key>CFBundleExecutable</key><string>AppSwitcher</string>
-	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>LSUIElement</key><true/>
-	<key>NSHighResolutionCapable</key><true/>
-	<key>LSMinimumSystemVersion</key><string>15.0</string>
-</dict>
-</plist>
-PLIST
-
-xattr -cr "$APP" 2>/dev/null || true
-if codesign --force -s "AppSwitcher Dev" "$APP" 2>/dev/null; then
-	echo "[sign] 自签名（AppSwitcher Dev）成功"
-else
-	codesign --force -s - "$APP"
-	echo "[sign] 回退 ad-hoc 签名"
+python3 scripts/app_bundle.py validate
+BUILD_KIND="${APPSWITCHER_BUILD_KIND:-local}"
+CONFIGURATION="${APPSWITCHER_CONFIGURATION:-release}"
+OUTPUT="${APPSWITCHER_OUTPUT:-build/AppSwitcher.app}"
+if [[ "$BUILD_KIND" == "distribution" ]]; then
+    if [[ "${APPSWITCHER_SIGN_IDENTITY:-}" != "Developer ID Application: "* ]]; then
+        echo "正式分发需 APPSWITCHER_SIGN_IDENTITY=Developer ID Application: …" >&2
+        exit 1
+    fi
+    if ! security find-identity -v -p codesigning | /usr/bin/grep -F -- "\"$APPSWITCHER_SIGN_IDENTITY\"" >/dev/null; then
+        echo "钥匙串中没有匹配的有效 Developer ID Application 身份" >&2
+        exit 1
+    fi
 fi
 
-echo "已生成: $(pwd)/$APP"
+STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/AppSwitcher-build.XXXXXX")"
+trap 'rm -rf "$STAGING_DIR"' EXIT
+python3 scripts/release_manifest.py capture "$STAGING_DIR/source.json"
+BUILD_ARGS=(-c "$CONFIGURATION")
+if [[ "$BUILD_KIND" == "distribution" ]]; then BUILD_ARGS+=(--arch arm64); fi
+swift build "${BUILD_ARGS[@]}" --product AppSwitcherApp
+BINARY_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
+python3 scripts/release_manifest.py verify "$STAGING_DIR/source.json" "$BINARY_DIR/AppSwitcherApp"
+APP="$STAGING_DIR/AppSwitcher.app"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+swift scripts/generate_app_icon.swift "$STAGING_DIR/AppIcon.iconset"
+iconutil -c icns "$STAGING_DIR/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
+cp -X "$BINARY_DIR/AppSwitcherApp" "$APP/Contents/MacOS/AppSwitcher"
+cp "$STAGING_DIR/source.json" "$APP/Contents/Resources/build-provenance.json"
+python3 scripts/app_bundle.py plist "$APP/Contents/Info.plist"
+xattr -cr "$APP" 2>/dev/null || true
+
+if [[ "$BUILD_KIND" == "distribution" ]]; then
+    codesign --force --options runtime --timestamp --sign "$APPSWITCHER_SIGN_IDENTITY" "$APP"
+elif codesign --force --sign "AppSwitcher Dev" "$APP" 2>/dev/null; then
+    echo "[sign] 本地自签名成功；不可作为官网正式发布包"
+else
+    codesign --force --sign - "$APP"
+    echo "[sign] 本地 ad-hoc 签名；不可作为官网正式发布包"
+fi
+codesign --verify --deep --strict "$APP"
+python3 scripts/app_bundle.py publish "$APP" "$OUTPUT"

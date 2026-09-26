@@ -1,4 +1,5 @@
 import AppSwitcherCore
+import AppSwitcherKit
 import Foundation
 
 // 最小测试运行器（无 Xcode 时的替代方案）。
@@ -134,37 +135,128 @@ func testWindowFilter() {
 
 @MainActor
 func testCandidateFactory() {
-    print("CandidateFactory 候选构建")
+    print("CandidateFactory 能力与身份")
+    let app = AppDescriptor(pid: 42, bundleIdentifier: "fixture", displayName: "Fixture")
+    let other = AppDescriptor(pid: 43, bundleIdentifier: "fixture", displayName: "Fixture")
+    func window(_ token: String?, _ title: String, raise: Bool = true, main: Bool = true) -> WindowDescriptor {
+        WindowDescriptor(pid: 42, title: title, windowNumber: 100, layer: 0, alpha: 1, width: 800, height: 600,
+                         targetToken: token, canRaise: raise, canSetMain: main)
+    }
+    func make(_ windows: [WindowDescriptor], unavailable: Set<Int> = []) -> [Candidate] {
+        CandidateFactory.makeWindowCandidates(apps: [app], windows: windows, unavailablePIDs: unavailable)
+    }
+    func isFallback(_ candidates: [Candidate]) -> Bool {
+        candidates.count == 1 && candidates[0].target == .application(pid: 42) && candidates[0].title.isEmpty
+    }
+    let applications = CandidateFactory.makeApplicationCandidates(apps: [app, other])
+    check(applications.count == 2, "同bundle的不同进程各自保留入口")
+    check(Set(applications.map(\.id)).count == 2, "应用身份包含PID，不误选首个同bundle进程")
+    check(applications.allSatisfy { !$0.isWindow && $0.title.isEmpty }, "默认只生成应用入口，没有伪窗口编号")
+    check(isFallback(make([])), "无窗口仍可切换应用")
+    check(isFallback(make([window(nil, "Document")])), "仅有标题/CG编号不能冒充可控窗口")
+    check(isFallback(make([window("a", ""), window("b", " \n")])), "无标题整应用回退，回归旧版数字窗口缺陷")
+    check(isFallback(make([window("a", "Untitled"), window("b", "Untitled")])), "同名窗口不按标题取第一个")
+    check(isFallback(make([window("a", " Mail "), window("b", "Mail")])), "去除首尾空白后同名也回退")
+    check(isFallback(make([window("a", "Café"), window("b", "Cafe\u{301}")])), "Unicode等价标题不冒充可辨认窗口")
+    check(isFallback(make([window("a", "One"), window("a", "Two")])), "重复控制token拒绝展开")
+    check(isFallback(make([window("", "One")])), "空token拒绝展开")
+    check(isFallback(make([window("a", "One", raise: false)])), "缺少窗口置前能力回退")
+    check(isFallback(make([window("a", "One", main: false)])), "缺少主窗口写入能力回退")
+    check(isFallback(make([window("a", "One"), window("b", "Two", raise: false)])), "同应用部分窗口不可控时整体回退")
+    check(isFallback(make([window("a", "One")], unavailable: [42])), "超时/不完整快照即使含部分有效窗也回退")
+    let windows = make([window("b", "Work"), window("a", "Mail")])
+    check(windows.count == 2 && windows.allSatisfy(\.isWindow), "独立对象+唯一标题+能力完整时展开")
+    check(windows.map(\.target) == [.window(pid: 42, token: "a"), .window(pid: 42, token: "b")], "窗口控制身份保留PID和token")
+    check(windows.map(\.title) == ["Mail", "Work"], "窗口按标题稳定展示，与枚举z-order无关")
+    let renamed = make([window("a", "Renamed")])
+    check(renamed.first?.target == windows.first?.target, "同一token改标题不改变控制目标")
+    check(renamed.first?.id == windows.first?.id, "展示名称与窗口身份解耦")
+    let remaining = make([window("b", "Work")])
+    check(remaining.first?.target == windows.last?.target && remaining.first?.title == "Work", "关闭别窗不重新编号目标")
+    let refreshed = make([window("z", "Mail"), window("y", "Work")])
+    let map1 = KeyAssigner.assign(AppRanker.rank(windows)).mapValues(\.title)
+    let map2 = KeyAssigner.assign(AppRanker.rank(refreshed)).mapValues(\.title)
+    check(map1 == map2, "随机token更新不打乱同标题集合键位")
+    let stats = CandidateFactory.makeApplicationCandidates(apps: [app], usage: ["fixture": UsageStats(activationCount: 7)])
+    check(stats.first?.activationCount == 7, "使用统计沿用bundle维度")
+    let legacy = CandidateFactory.makeCandidates(apps: [app], windows: [window(nil, ""), window(nil, "")])
+    check(isFallback(legacy), "旧CG入口安全降级为一个应用，原失败用例转绿")
+}
 
-    let apps = [
-        AppDescriptor(pid: 1, bundleIdentifier: "com.a.chrome", displayName: "Chrome"),
-        AppDescriptor(pid: 2, bundleIdentifier: "com.a.codex", displayName: "ChatGPT"),
-        AppDescriptor(pid: 3, bundleIdentifier: "com.a.menubar", displayName: "MenuBarTool"),
-    ]
-    let windows = [
-        WindowDescriptor(pid: 1, title: "Doc", windowNumber: 101, layer: 0, alpha: 1, width: 800, height: 600),
-        WindowDescriptor(pid: 1, title: "Mail", windowNumber: 102, layer: 0, alpha: 1, width: 800, height: 600),
-        WindowDescriptor(pid: 2, title: "", windowNumber: 201, layer: 0, alpha: 1, width: 800, height: 600),
-        WindowDescriptor(pid: 2, title: "", windowNumber: 202, layer: 0, alpha: 1, width: 800, height: 600),
-        WindowDescriptor(pid: 2, title: "", windowNumber: 203, layer: 0, alpha: 1, width: 800, height: 600),
-        WindowDescriptor(pid: 3, title: "", windowNumber: 301, layer: 0, alpha: 1, width: 500, height: 500),
-    ]
-    let usage = ["com.a.chrome": UsageStats(activationCount: 5, lastActivatedAt: Date())]
+@MainActor
+func testKeyboardNavigation() {
+    print("键盘与完整38键")
+    let mapped = (UInt16(0)...UInt16(126)).compactMap { KeyInput.key(for: $0) }
+    check(Set(mapped) == Set(Key.all) && mapped.count == 38, "物理键映射覆盖38键且无重复")
+    check(KeyInput.key(for: 24)?.label == "+", "等号物理键触发界面加号，无需依赖输入法文本")
+    check(KeyInput.key(for: 8)?.label == "C", "C键按硬件位置识别")
+    check(KeyInput.key(for: 53) == nil, "Esc不会意外激活候选")
+    let available: Set<Key> = [Key("Q", letter: true), Key("A", letter: true), Key("Z", letter: true), Key("1", letter: false)]
+    check(KeyNavigation.move(from: nil, direction: .right, available: available)?.label == "1", "默认选择首个可用视觉键")
+    check(KeyNavigation.move(from: Key("Q", letter: true), direction: .down, available: available)?.label == "A", "向下选择最近的下一排目标")
+    check(KeyNavigation.move(from: Key("Q", letter: true), direction: .up, available: available)?.label == "1", "方向键能访问数字溢出行")
+    check(KeyNavigation.move(from: Key("1", letter: false), direction: .left, available: available)?.label == "Z", "水平导航跳过空键并循环")
+    check(KeyNavigation.move(from: nil, direction: .up, available: []) == nil, "空界面方向键安全")
+    let many = (0..<50).map { candidate("App \($0)", group: "group\($0)") }
+    let mapping = KeyAssigner.assign(many)
+    check(mapping.count == 38 && Set(mapping.keys) == Set(Key.all), "超过容量时恰好38个可见可达入口")
+}
 
-    let candidates = CandidateFactory.makeCandidates(apps: apps, windows: windows, usage: usage)
+// MARK: - Key 相等性
 
-    check(candidates.count == 5, "只保留有内容窗口的 app（菜单栏工具排除）")
+@MainActor
+func testKeyEquality() {
+    print("Key 相等性（以 label 为标识）")
+    check(Key("C", letter: true) == Key("C", letter: true, x: 2, y: 2), "同 label 不同坐标相等")
+    check(Key("C", letter: true) != Key("V", letter: true, x: 3, y: 2), "不同 label 不等")
+    check(Set([Key("C", letter: true, x: 2, y: 2)]).contains(Key("C", letter: true)), "Set 按 label 命中")
+}
 
-    let chrome = candidates.filter { $0.groupID == "com.a.chrome" }
-    check(chrome.count == 2, "Chrome 两个窗口展开为 2 条")
-    check(chrome.allSatisfy { $0.activationCount == 5 }, "Chrome 使用统计合并")
+// MARK: - 用户快捷键配置
 
-    let codex = candidates.filter { $0.groupID == "com.a.codex" }
-    check(codex.count == 3, "codex 三个窗口展开为 3 条")
-    check(codex.map(\.title) == ["窗口 1", "窗口 2", "窗口 3"], "无标题多窗口降级为「窗口 N」")
-
-    let chromeTitles = chrome.map(\.title).sorted()
-    check(chromeTitles == ["Doc", "Mail"], "有标题窗口使用真实标题")
+@MainActor
+func testShortcutPreferences() {
+    print("快捷键校验与独立配置持久化")
+    expectEqual(AppShortcut.default.displayName, "⌃⌥Space", "升级后保留默认组合键")
+    check(AppShortcut.default.validationMessage == nil, "默认组合合法")
+    check(ShortcutPreferences.default.sequenceEnabled, "升级后默认保留F→J")
+    check(AppShortcut(keyCode: 0, modifiers: []).validationMessage != nil, "拒绝裸字母，避免影响正常输入")
+    check(AppShortcut(keyCode: 0, modifiers: .shift).validationMessage != nil, "拒绝只有Shift的普通字母")
+    check(AppShortcut(keyCode: 0, modifiers: [.control, .shift]).validationMessage == nil, "允许Control加Shift组合")
+    check(AppShortcut(keyCode: 53, modifiers: .command).validationMessage != nil, "Esc保留用于退出录制")
+    check(AppShortcut(keyCode: 55, modifiers: .command).validationMessage != nil, "修饰键本身不能作为触发键")
+    check(AppShortcut(keyCode: .max, modifiers: .command).validationMessage != nil, "拒绝未知物理键码")
+    check(AppShortcut(keyCode: 0, modifiers: ShortcutModifiers(rawValue: 128)).validationMessage != nil, "拒绝配置中未知修饰位")
+    let custom = ShortcutPreferences(hotKey: AppShortcut(keyCode: 8, modifiers: [.control, .option, .shift]), sequenceEnabled: false)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AppSwitcher-shortcut-tests-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = ShortcutStore(fileURL: directory.appendingPathComponent("shortcuts.json"))
+    do {
+        let missing = try store.load()
+        check(missing == nil, "旧版本没有配置文件时使用默认值")
+        try store.save(custom)
+        let restartedStore = ShortcutStore(fileURL: directory.appendingPathComponent("shortcuts.json"))
+        let persisted = try restartedStore.load()
+        expectEqual(persisted, custom, "重建存储后保留自定义组合及F→J关闭状态")
+        let invalid = ShortcutPreferences(hotKey: AppShortcut(keyCode: 0, modifiers: []), sequenceEnabled: true)
+        do {
+            try store.save(invalid)
+            check(false, "非法配置不得覆盖已保存值")
+        } catch {
+            check(true, "非法配置不得覆盖已保存值")
+        }
+        let afterFailure = try store.load()
+        expectEqual(afterFailure, custom, "非法保存后原配置仍完整")
+        try Data("{invalid-json".utf8).write(to: directory.appendingPathComponent("shortcuts.json"))
+        do {
+            _ = try store.load()
+            check(false, "损坏配置必须报告失败，不伪装为空配置")
+        } catch {
+            check(true, "损坏配置必须报告失败，不伪装为空配置")
+        }
+    } catch {
+        check(false, "快捷键持久化测试意外失败：\(error.localizedDescription)")
+    }
 }
 
 // MARK: - 运行
@@ -173,6 +265,9 @@ testKeyAssigner()
 testAppRanker()
 testWindowFilter()
 testCandidateFactory()
+testKeyEquality()
+testKeyboardNavigation()
+testShortcutPreferences()
 
 print("")
 if failCount == 0 {

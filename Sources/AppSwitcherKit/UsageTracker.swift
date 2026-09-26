@@ -2,6 +2,7 @@ import AppKit
 import AppSwitcherCore
 
 /// 低频轮询前台下 App，累计激活次数/最近激活时间。
+@MainActor
 public final class UsageTracker {
     private let store: UsageStore
     private var stats: [String: UsageStats]
@@ -16,7 +17,7 @@ public final class UsageTracker {
     public func start(interval: TimeInterval = 1.0) {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.tick()
+            MainActor.assumeIsolated { self?.tick() }
         }
     }
 

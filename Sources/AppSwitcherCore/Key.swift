@@ -12,6 +12,15 @@ public struct Key: Hashable, Sendable {
         self.x = x
         self.y = y
     }
+
+    // 以 label 为唯一标识：label 唯一决定键位，x/y 是派生坐标，不参与相等性/哈希。
+    public static func == (lhs: Key, rhs: Key) -> Bool {
+        lhs.label == rhs.label
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(label)
+    }
 }
 
 public extension Key {

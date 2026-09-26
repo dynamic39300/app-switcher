@@ -1,0 +1,16 @@
+[Unit]
+Description=Reconcile AppSwitcher payments and refunds
+After=network-online.target
+[Service]
+Type=oneshot
+User=appswitcher
+Group=appswitcher
+WorkingDirectory=/opt/appswitcher/current/web
+EnvironmentFile=/etc/appswitcher/commerce.env
+ExecStart=/opt/appswitcher/current/web/.venv/bin/python manage.py reconcile_payments
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/appswitcher/runtime
+UMask=0077

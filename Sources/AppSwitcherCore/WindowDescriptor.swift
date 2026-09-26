@@ -1,4 +1,4 @@
-/// 一个窗口的描述（纯值类型，来自 CGWindowList 的归一化表示）。
+/// 窗口探测结果。真实 AX 对象留在适配器，Core 只接收快照 token 和能力。
 public struct WindowDescriptor: Hashable, Sendable {
     public let pid: Int
     public let title: String
@@ -7,6 +7,9 @@ public struct WindowDescriptor: Hashable, Sendable {
     public let alpha: Double
     public let width: Double
     public let height: Double
+    public let targetToken: String?
+    public let canRaise: Bool
+    public let canSetMain: Bool
 
     public init(
         pid: Int,
@@ -15,7 +18,10 @@ public struct WindowDescriptor: Hashable, Sendable {
         layer: Int,
         alpha: Double,
         width: Double,
-        height: Double
+        height: Double,
+        targetToken: String? = nil,
+        canRaise: Bool = false,
+        canSetMain: Bool = false
     ) {
         self.pid = pid
         self.title = title
@@ -24,5 +30,8 @@ public struct WindowDescriptor: Hashable, Sendable {
         self.alpha = alpha
         self.width = width
         self.height = height
+        self.targetToken = targetToken
+        self.canRaise = canRaise
+        self.canSetMain = canSetMain
     }
 }

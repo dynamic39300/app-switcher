@@ -1,0 +1,26 @@
+[Unit]
+Description=AppSwitcher commerce
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=appswitcher
+Group=appswitcher
+WorkingDirectory=/opt/appswitcher/current/web
+EnvironmentFile=/etc/appswitcher/commerce.env
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/opt/appswitcher/current/web/.venv/bin/python manage.py check --deploy --fail-level WARNING
+ExecStart=/opt/appswitcher/current/web/.venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2 --threads 2 --timeout 45 --graceful-timeout 30 --access-logfile - --error-logfile - --access-logformat "%%(m)s %%(U)s %%(s)s %%(L)s"
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/appswitcher/runtime
+UMask=0077
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

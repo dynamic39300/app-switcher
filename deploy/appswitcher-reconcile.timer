@@ -1,0 +1,8 @@
+[Unit]
+Description=Run AppSwitcher payment reconciliation every minute
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+Unit=appswitcher-reconcile.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,82 @@
+{% load static %}
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="AppSwitcher，让 Mac 应用切换回到键盘。自定义快捷键、清晰大图标、按能力选择窗口。14 天全功能试用，按月、季、年主动续费。"
+    />
+    <meta name="theme-color" content="#f5f6f8" />
+    <meta name="color-scheme" content="light" />
+    <title>AppSwitcher · 把切换交给键盘</title>
+    <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml" />
+    <link rel="stylesheet" href="{% static 'app.css' %}" />
+    <script src="{% static 'vendor/qrcode.js' %}" defer></script>
+    <script src="{% static 'app.js' %}" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳至主要内容</a>
+    <div id="environment-notice" class="environment-notice" hidden></div>
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="brand" href="/" aria-label="AppSwitcher 首页"
+          ><span class="brand-mark" aria-hidden="true">⌘</span
+          ><span>AppSwitcher</span></a
+        >
+        <button
+          id="nav-toggle"
+          class="nav-toggle"
+          aria-expanded="false"
+          aria-controls="site-nav"
+          aria-label="展开导航"
+        >
+          菜单
+        </button>
+        <nav id="site-nav" aria-label="主导航">
+          <a href="/" data-nav="/">产品</a>
+          <a href="/pricing/" data-nav="/pricing/">价格</a>
+          <a href="/download/" data-nav="/download/">下载</a>
+          <a href="/support/" data-nav="/support/">帮助</a>
+          <a class="nav-account" id="nav-account" href="/login/"
+            >登录账号 <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+      </div>
+    </header>
+    <main id="main" tabindex="-1">
+      <div class="page-loader" role="status">
+        <span class="spinner" aria-hidden="true"></span
+        ><span>正在准备页面…</span>
+      </div>
+    </main>
+    <noscript
+      ><div class="notice page-width">
+        请启用浏览器 JavaScript，以完成账号登录、订单和支付操作。AppSwitcher
+        是面向 macOS 15 及以上 Apple Silicon 电脑的键盘切换工具。
+      </div></noscript
+    >
+    <footer class="site-footer">
+      <div class="footer-top page-width">
+        <a class="brand" href="/"
+          ><span class="brand-mark" aria-hidden="true">⌘</span
+          ><span>AppSwitcher</span></a
+        >
+        <p>让手留在键盘，让思路继续。</p>
+      </div>
+      <div class="footer-bottom page-width">
+        <!-- prettier-ignore -->
+        <span>© <span id="copyright-year">2026</span> AppSwitcher{% if legal_entity_name %} · {{ legal_entity_name }}{% endif %}</span>
+        <div>
+          <a href="/privacy/">隐私说明</a><a href="/terms/">服务与退款条款</a
+          ><a href="/support/">联系我们</a>
+        </div>
+      </div>
+    </footer>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="action-dialog" aria-labelledby="dialog-title">
+      <div id="dialog-content"></div>
+    </dialog>
+  </body>
+</html>
