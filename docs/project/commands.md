@@ -1,5 +1,36 @@
 # 命令索引
 
+## 当前：0.5.0 图标拖拽与唤醒引导（2026-09-27）
+
+已从本地 DMG 安装 `~/Applications/AppSwitcher.app` 并启动。安装时读取的当前组合为 ⌘J、F→J 开启，主题石墨；本轮安装不改这些设置。应用模式中拖到空键移动、拖到已有图标的键交换，落位后自动保存；“不再提示”跨重启保留，顶部手形菜单可重播/重新开启及恢复默认键位。键位独立存于 `~/Library/Application Support/AppSwitcher/key-mapping.json`，窗口模式不保存临时窗口键位。
+
+- 构建：`APPSWITCHER_OUTPUT="$HOME/Library/Application Support/AppSwitcher/BuildCandidates/AppSwitcher-0.5.0-preview.app" ./scripts/build_app.sh`
+- 隔离交互：`"$HOME/Library/Application Support/AppSwitcher/BuildCandidates/AppSwitcher-0.5.0-preview.app/Contents/MacOS/AppSwitcher" --preview-key-drag build/previews/0.5.0-drag-fixture`。只用合成目标，独立偏好，不激活真实应用；夹具忽略取消，以该测试进程的 SIGTERM 结束，不用于正常启动。
+- 原生布局：`--verify-appearance` 27 项；`--render-preview build/previews/0.5.0-final` 三主题各 19 个场景，共 57 张。
+- 安装包：`~/Library/Application Support/AppSwitcher/BuildCandidates/AppSwitcher-0.5.0-local-preview.dmg`。自签名、未公证、未发布官网；命令与验证明细见[交付记录](../features/FEAT-001-app-switcher/key-drag-2026-09-27.md)。
+
+## 0.4.3 满版黑底图标（2026-09-27，历史）
+
+当前安装 `~/Applications/AppSwitcher.app`，版本 0.4.3 local，启动：`open "$HOME/Applications/AppSwitcher.app"`。黑色背景覆盖整个图标，Finder 简介与列表已目视确认没有原先浅色外框；三主题及快捷键配置保持。新 DMG：`~/Library/Application Support/AppSwitcher/BuildCandidates/AppSwitcher-0.4.3-local-preview.dmg`，使用 `bash scripts/package_local_preview.sh <local.app> <new-output.dmg>` 生成，自签名、未公证。实际检查、摘要与回退见[图标记录](../features/FEAT-001-app-switcher/icon-full-bleed-2026-09-27.md)。
+
+## 0.4.2 三套原生主题（2026-09-26，历史）
+
+当时安装 `~/Applications/AppSwitcher.app`（0.4.2 local、自签名），现已更新为上方 0.4.3。按已保存的 ⌘E 唤出，面板顶部点击「石墨 / 银瓷 / 烟晶」，或面板内按 ⌘1 / ⌘2 / ⌘3 即时切换并保存；换主题无需重启。外观独立存于 `~/Library/Application Support/AppSwitcher/appearance.json`，快捷键文件不改。原 0.4.0 预览副本已退出但保留可回退。
+
+`--verify-appearance`：25 项隔离偏好与布局检查。`--verify-overlay-drag`：本轮单屏 33 项含主题回归。`--render-preview build/previews/0.4.2-themes-final`：三主题子目录各 16 张共 48 张。安装制品、实际唤起、失败首证与未测范围见[主题交付记录](../features/FEAT-001-app-switcher/appearance-themes-2026-09-26.md)。本地 DMG 在 BuildCandidates 的 `AppSwitcher-0.4.2-local-preview.dmg`，未公证，未上传官网。
+
+以下 0.4.0 及更早记录为历史，不代表当前运行版本。
+
+## 2026-09-26 本机运行状态
+
+最新预览包已加入鼠标拖动：按住标题、空白背景、空键位或底部说明可移动并跨屏，松手时适配目标屏，本轮切模式不复位。已原路径更新并重启；最终制品与双屏实测见 [TKT-015](../features/FEAT-001-app-switcher/panel-drag-2026-09-26.md)。
+
+当前本机运行 0.4.0 local 预览包：`open "$HOME/Library/Application Support/AppSwitcher/BuildCandidates/AppSwitcher-0.4.0-preview.app"`。录制反馈修复包已签名、替换并重启，唤出快捷键已通过设置保存为 `⌘E`，重启后的实际录制、保存与全局唤起验证通过；F→J 开关保留 true，完整手势未复验。更改入口是菜单栏 →「快捷键设置…」→ 点击组合键录制 → 保存。制品、备份及验证边界见 [TKT-014](../features/FEAT-001-app-switcher/shortcut-recovery-2026-09-26.md)。
+
+下表 `~/Applications/AppSwitcher.app` / 0.3.2 为历史安装记录，本机目前没有该安装副本，不应按这些记录推断当前版本或快捷键。
+
+## 项目与历史命令
+
 工具链：Swift 6.3.3、macOS 26.6.2、Apple Silicon；SwiftPM，最低目标 macOS 15。所有命令从项目根执行。实际检查结果见 [QA-001](../features/FEAT-001-app-switcher/test-plan.md)。
 
 | 操作 | 命令 | 说明 |
@@ -10,6 +41,7 @@
 | 合成 UI 渲染 | `.build/debug/AppSwitcherApp --render-preview build/previews/0.3.1` | 应用/窗口/空/失败/加载/窄屏/38键/短屏，以及笔记本/大屏/超宽屏/窄短屏38窗，以及中宽短屏38窗/大屏应用/缺图标，共十六场景；不启动热键、统计或读取用户窗口 |
 | 快捷键设置预览 | `.build/debug/AppSwitcherApp --render-settings-preview build/previews/0.3.0/settings` | 默认、录制、冲突、草稿四种合成状态；不注册热键或监听按键 |
 | 隔离快捷键注册验证 | `.build/debug/AppSwitcherApp --verify-shortcuts` | 注册四修饰 F17–F19，真实跨进程排他冲突、写入失败回滚、暂停恢复及释放；不生成键盘事件。非排他注册检测边界以 NOTE 单独记录 |
+| 面板拖动验证 | `.build/debug/AppSwitcherApp --verify-overlay-drag` | 显式生成鼠标/定向键盘事件，只操作合成面板；验证拖动、双屏适配、更新保持与按钮/键盘回归。需系统事件发送权限，未授权 exit 2；单屏会说明未执行实际跨屏；Release 包支持同入口 |
 | 隔离 AX 集成 | `.build/debug/AppSwitcherApp --verify-window-switching` | 父子进程仅控制本工具创建的合成窗口；0=通过、1=失败、2=权限不足跳过，跳过不是通过；不自动申请权限 |
 | 隔离应用唤起回归 | `.build/debug/AppSwitcherApp --verify-app-activation` | 在临时目录创建独立合成 App，验证同包 helper 下四种窗口状态及同 exe 真多实例拒绝；不操作用户应用 |
 | 本地 release 打包 | `./scripts/build_app.sh` | 临时目录组装签名后复制到 `build/AppSwitcher.app` 并严格验签，优先 `AppSwitcher Dev` 自签名，否则 ad-hoc；不是对外发布/公证 |

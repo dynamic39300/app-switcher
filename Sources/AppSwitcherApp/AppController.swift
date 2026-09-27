@@ -16,7 +16,7 @@ final class AppController: NSObject {
     private let commerce = CommerceController()
     private let isIsolatedUITest: Bool
 
-    private static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.4.0"
+    private static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版"
 
     override init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -69,7 +69,9 @@ final class AppController: NSObject {
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "AppSwitcher")
+            button.image = AppBranding.menuBarIcon
+            if button.image == nil { button.title = "AppSwitcher" }
+            button.setAccessibilityLabel("AppSwitcher")
         }
         let menu = NSMenu()
         menu.addItem(withTitle: "AppSwitcher \(Self.version)", action: nil, keyEquivalent: "")

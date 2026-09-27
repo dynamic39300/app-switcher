@@ -6,6 +6,13 @@ MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
 
+    if let index = CommandLine.arguments.firstIndex(of: "--preview-key-drag"), CommandLine.arguments.count > index + 1 {
+        let fixture = KeyRemappingPreview(directory: URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true))
+        fixture.show()
+        withExtendedLifetime(fixture) { app.run() }
+        exit(0)
+    }
+
     #if !DEBUG
     if CommandLine.arguments.contains("--verify-commerce-api") || CommandLine.arguments.contains("--render-commerce-preview") {
         fputs("This isolated development command is unavailable in release builds.\n", stderr)
@@ -55,6 +62,13 @@ MainActor.assumeIsolated {
         exit(Int32(CommerceProbe.run()))
     } else if CommandLine.arguments.contains("--verify-shortcuts") {
         exit(Int32(ShortcutRegistrationProbe.run()))
+    } else if CommandLine.arguments.contains("--verify-branding") {
+        exit(Int32(BrandingProbe.run()))
+    } else if CommandLine.arguments.contains("--verify-appearance") {
+        exit(Int32(OverlayAppearanceProbe.run()))
+    } else if CommandLine.arguments.contains("--verify-overlay-drag") {
+        Task { @MainActor in exit(Int32(await OverlayDragProbe.run())) }
+        app.run()
     } else if CommandLine.arguments.contains("--verify-app-activation") {
         Task { @MainActor in exit(Int32(await AppActivationProbe.run())) }
         app.run()

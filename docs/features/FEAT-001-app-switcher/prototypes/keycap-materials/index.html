@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- THROWAWAY: three native-overlay material/layout proposals on one page, ?variant=A|B|C. -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AppSwitcher · 键帽设计实验</title>
+  <link rel="stylesheet" href="prototype.css">
+  <script src="prototype.js" defer></script>
+</head>
+<body data-variant="A">
+  <main>
+    <header class="study-header">
+      <div><p class="eyebrow">APPSWITCHER / MATERIAL STUDY</p><h1 id="study-title">石墨机械</h1></div>
+      <p id="study-description"></p>
+    </header>
+    <section class="panel" aria-label="应用切换面板，交互原型">
+      <header class="panel-header">
+        <div class="brand"><svg viewBox="0 0 18 18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"><rect x="-2.1" y="-2.1" width="4.2" height="4.2" rx=".65" transform="translate(9 4.6) rotate(45)"/><rect x="-2.1" y="-2.1" width="4.2" height="4.2" rx=".65" transform="translate(4.6 9) rotate(45)"/><rect x="-2.1" y="-2.1" width="4.2" height="4.2" rx=".65" transform="translate(13.4 9) rotate(45)"/><rect x="-2.1" y="-2.1" width="4.2" height="4.2" rx=".65" transform="translate(9 13.4) rotate(45)"/></g></svg><span>AppSwitcher</span></div>
+        <span class="panel-mode">应用 <span class="separator">/</span> 12 个合成目标</span>
+        <span class="prototype-badge">交互原型</span>
+      </header>
+      <div class="panel-body">
+        <aside class="spotlight" aria-label="当前选择">
+          <span class="spotlight-eyebrow">当前选择</span><div class="spotlight-icon"></div>
+          <div class="spotlight-copy"><h2 class="target-name">Safari</h2><p class="target-description">浏览网页，继续探索。</p></div>
+          <div class="spotlight-action"><kbd class="target-key">S</kbd><span>按键即可切换</span></div>
+        </aside>
+        <div class="keyboard-well"><div id="keyboard" class="keyboard" aria-label="QWERTY 示例键盘"></div></div>
+      </div>
+      <footer class="panel-footer"><span class="selection-readout"><i></i><strong id="selection-name">Safari</strong><span id="interaction-state">已选中</span></span><span class="keyboard-hint">字母键 选择 <span>·</span> Enter 确认</span></footer>
+    </section>
+    <div class="material-notes" aria-label="方案细节"><p><span>材质</span><strong id="material-note"></strong></p><p><span>触感</span><strong id="motion-note"></strong></p><p><span>布局</span><strong id="layout-note"></strong></p></div>
+    <p class="demo-instructions" id="result" role="status" aria-live="polite">试着按住一个键帽，再松开。这里只模拟，不切换真实应用。</p>
+  </main>
+  <nav class="prototype-switcher" aria-label="设计方案切换" hidden><button id="previous" aria-label="上一个方案">←</button><div class="variant-buttons"><button data-variant-choice="A">A<span>石墨机械</span></button><button data-variant-choice="B">B<span>银瓷工作台</span></button><button data-variant-choice="C">C<span>烟晶控制台</span></button></div><button id="next" aria-label="下一个方案">→</button></nav>
+</body>
+</html>

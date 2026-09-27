@@ -30,46 +30,55 @@ enum OverlayPreview {
         .init(key: "M", name: "Music", iconPath: "/System/Applications/Music.app", symbol: "music.note", color: .systemPink, count: 1),
     ]
 
-    static func render(to directory: URL) throws -> [URL] {
+    static func render(to directory: URL, style: OverlayStyle? = nil) throws -> [URL] {
+        guard let style else {
+            return try OverlayStyle.allCases.flatMap { try render(to: directory.appendingPathComponent($0.rawValue), style: $0) }
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let icons = Dictionary(uniqueKeysWithValues: examples.map { ($0.groupID, icon(for: $0)) })
         let applications = applicationMap()
         let windows = windowMap()
         var urls: [URL] = []
-        urls.append(try save("01-applications", directory: directory, keyMap: applications, icons: icons,
+        urls.append(try save("01-applications", directory: directory, style: style, keyMap: applications, icons: icons,
                              mode: .applications, selectedKey: Key("S", letter: true)))
-        urls.append(try save("02-windows", directory: directory, keyMap: windows, icons: icons,
+        urls.append(try save("02-windows", directory: directory, style: style, keyMap: windows, icons: icons,
                              mode: .windows, selectedKey: Key("S", letter: true)))
-        urls.append(try save("03-empty", directory: directory, keyMap: [:], icons: [:], mode: .applications))
-        urls.append(try save("04-failure", directory: directory, keyMap: applications, icons: icons, mode: .applications,
+        urls.append(try save("03-empty", directory: directory, style: style, keyMap: [:], icons: [:], mode: .applications))
+        urls.append(try save("04-failure", directory: directory, style: style, keyMap: applications, icons: icons, mode: .applications,
                              selectedKey: Key("S", letter: true), message: "未能确认目标窗口已获得焦点，请重新选择应用后重试。"))
-        urls.append(try save("05-narrow", directory: directory, keyMap: windows, icons: icons,
+        urls.append(try save("05-narrow", directory: directory, style: style, keyMap: windows, icons: icons,
                              mode: .windows, selectedKey: Key("S", letter: true), width: 760))
-        urls.append(try save("06-overflow", directory: directory, keyMap: overflowMap(), icons: icons,
+        urls.append(try save("06-overflow", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
                              mode: .applications, selectedKey: Key("1", letter: false)))
-        urls.append(try save("07-loading", directory: directory, keyMap: [:], icons: [:], mode: .windows, isLoading: true))
-        urls.append(try save("08-overflow-narrow", directory: directory, keyMap: overflowMap(), icons: icons,
+        urls.append(try save("07-loading", directory: directory, style: style, keyMap: [:], icons: [:], mode: .windows, isLoading: true))
+        urls.append(try save("08-overflow-narrow", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
                              mode: .applications, selectedKey: Key("1", letter: false), width: 760))
-        urls.append(try save("09-short-screen", directory: directory, keyMap: overflowMap(), icons: icons,
+        urls.append(try save("09-short-screen", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
                              mode: .applications, selectedKey: Key("1", letter: false), height: 520))
-        urls.append(try save("10-laptop", directory: directory, keyMap: applications, icons: icons,
+        urls.append(try save("10-laptop", directory: directory, style: style, keyMap: applications, icons: icons,
                              mode: .applications, selectedKey: Key("S", letter: true), screenSize: CGSize(width: 1280, height: 720)))
-        urls.append(try save("11-large-screen", directory: directory, keyMap: windows, icons: icons,
+        urls.append(try save("11-large-screen", directory: directory, style: style, keyMap: windows, icons: icons,
                              mode: .windows, selectedKey: Key("S", letter: true), screenSize: CGSize(width: 1920, height: 1040)))
-        urls.append(try save("12-ultrawide", directory: directory, keyMap: overflowMap(), icons: icons,
+        urls.append(try save("12-ultrawide", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
                              mode: .applications, selectedKey: Key("1", letter: false), screenSize: CGSize(width: 2560, height: 1080)))
         let crowdedWindows = overflowMap().mapValues { candidate in
             Candidate(id: candidate.id, groupID: candidate.groupID, displayName: candidate.displayName,
                       title: "设计评审与窗口切换方案", target: .window(pid: candidate.target.pid, token: candidate.id))
         }
-        urls.append(try save("13-windows-narrow-short", directory: directory, keyMap: crowdedWindows, icons: icons,
+        urls.append(try save("13-windows-narrow-short", directory: directory, style: style, keyMap: crowdedWindows, icons: icons,
                              mode: .windows, selectedKey: Key("1", letter: false), width: 760, height: 430))
-        urls.append(try save("14-windows-medium-short", directory: directory, keyMap: crowdedWindows, icons: icons,
+        urls.append(try save("14-windows-medium-short", directory: directory, style: style, keyMap: crowdedWindows, icons: icons,
                              mode: .windows, selectedKey: Key("1", letter: false), width: 1040, height: 520))
-        urls.append(try save("15-applications-large", directory: directory, keyMap: applications, icons: icons,
+        urls.append(try save("15-applications-large", directory: directory, style: style, keyMap: applications, icons: icons,
                              mode: .applications, selectedKey: Key("S", letter: true), screenSize: CGSize(width: 2560, height: 1440)))
-        urls.append(try save("16-missing-icons", directory: directory, keyMap: applications, icons: [:],
+        urls.append(try save("16-missing-icons", directory: directory, style: style, keyMap: applications, icons: [:],
                              mode: .applications, selectedKey: Key("S", letter: true)))
+        urls.append(try save("17-drag-guide", directory: directory, style: style, keyMap: applications, icons: icons,
+                             mode: .applications, selectedKey: Key("S", letter: true), showsDragGuide: true))
+        urls.append(try save("18-drag-guide-narrow-short", directory: directory, style: style, keyMap: applications, icons: icons,
+                             mode: .applications, selectedKey: Key("S", letter: true), width: 760, height: 430, showsDragGuide: true))
+        urls.append(try save("19-drag-guide-overflow", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
+                             mode: .applications, selectedKey: Key("1", letter: false), width: 1040, height: 520, showsDragGuide: true))
         return urls
     }
 
@@ -128,19 +137,21 @@ enum OverlayPreview {
         }
     }
 
-    private static func save(_ name: String, directory: URL, keyMap: [Key: Candidate], icons: [String: NSImage],
+    private static func save(_ name: String, directory: URL, style: OverlayStyle, keyMap: [Key: Candidate], icons: [String: NSImage],
                              mode: OverlayMode, selectedKey: Key? = nil, message: String? = nil,
                              width: CGFloat? = nil, isLoading: Bool = false, height: CGFloat? = nil,
-                             screenSize: CGSize = CGSize(width: 1440, height: 860)) throws -> URL {
+                             screenSize: CGSize = CGSize(width: 1440, height: 860), showsDragGuide: Bool = false) throws -> URL {
         let preferred = OverlayView.preferredSize(in: screenSize)
         let size = CGSize(width: width ?? preferred.width, height: height ?? preferred.height)
         let view = OverlayView(keyMap: keyMap, icons: icons, mode: mode, selectedKey: selectedKey,
                                isLoading: isLoading, message: message, onSelect: { _ in }, onActivate: { _ in },
-                               onToggleMode: {}, onCancel: {}, onSettings: {})
+                               onToggleMode: {}, onCancel: {}, onSettings: {},
+                               style: style, onChangeStyle: { _ in }, onRemap: showsDragGuide ? { _, _, _ in false } : nil,
+                               showsDragGuide: showsDragGuide, onChangeDragGuide: { _ in })
             .frame(width: size.width, height: size.height)
         let png: Data
-        let minimumHeight: CGFloat = keyMap.keys.contains { !$0.isLetter } ? 604 : 492
-        if size.height < minimumHeight || isLoading {
+        let minimumHeight: CGFloat = keyMap.keys.contains { !$0.isLetter } ? 720 : 604
+        if size.height < minimumHeight || isLoading || showsDragGuide {
             // ImageRenderer omits native ScrollView and ProgressView content; render only this synthetic
             // hosting view into a bitmap. This window is never ordered onto the user's screen.
             png = try renderHosted(view, size: size, name: name)

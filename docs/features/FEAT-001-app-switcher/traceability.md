@@ -26,8 +26,13 @@ upstream: [SPEC-001]
 | AC-11 按能力窗口展开 | `CandidateFactory` / AX 枚举与能力门禁 | TKT-009 / 008 | TEST-011 |
 | AC-12 对象身份与精确聚焦 | token 注册表 / `AppActivator` / focused window 读回；与 App reopen 分流 | TKT-009、010 / 008 | TEST-012、014 |
 | AC-13 超时与会话竞态 | AX 短超时 / Controller generation / 单次提交 | TKT-009 / 008 | TEST-013 |
+| AC-14 鼠标移动自身面板 / 跨屏收纳 / 保留本轮位置 | `OverlayView` 原生拖动 / `OverlayPanel` / `OverlayPlacement` | TKT-015 | TEST-016，见[交付记录](panel-drag-2026-09-26.md) |
 
 ## 状态与证据边界
+
+AC-16/17/18 → `KeyRemapping` / `KeyAssigner` / `KeyMappingStore` / `OverlayController` / `OverlayPanel` / `OverlayView` / `KeyDragVisual` → TKT-018 → TEST-019（CoreTests + 独立交互夹具 + 制品检查）；证据见[拖拽记录](key-drag-2026-09-27.md)。
+
+AC-15 → `OverlayAppearanceStore` / `OverlayStyle` / `OverlayPalette` / `MaterialKeycapStyle` / `OverlayPanel` → TKT-017 → TEST-018；同时回归 AC-10 / AC-14。证据统一见[三主题记录](appearance-themes-2026-09-26.md)。
 
 | 项 | 状态 |
 | --- | --- |

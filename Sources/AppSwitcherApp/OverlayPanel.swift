@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import AppSwitcherCore
+import AppSwitcherKit
 
 /// Owns the keyboard snapshot and restores focus only for explicit cancellation.
 @MainActor
@@ -15,25 +16,41 @@ final class OverlayPanel {
     private var monitors: [Any] = []
     private var deactivationObserver: NSObjectProtocol?
     private var icons: [String: NSImage] = [:]
+    private let iconOverrides: [String: NSImage]
     private var mode: OverlayMode = .applications
     private var isLoading = false
     private var message: String?
+    private var feedbackIsSuccess = false
     private var selectedKey: Key?
     private var presentationScreen: NSScreen?
+    private let appearance: OverlayAppearanceStore
+    private let mappingStore: KeyMappingStore
+    private var isDraggingKey = false
+    private var guideRevision = 0
+    private var interactionRevision = 0
+    var style: OverlayStyle { appearance.style }
 
     private(set) var keyMap: [Key: Candidate] = [:]
     var onKey: ((Key) -> Void)?
     var onCancel: ((Bool) -> Void)?
     var onToggleMode: (() -> Void)?
     var onSettings: (() -> Void)?
+    var onRemap: ((Key, Key, String) -> Bool)?
+    var onResetBindings: ((String?) -> Void)?
     var isVisible: Bool { panel.isVisible }
 
-    init() {
+    init(appearance: OverlayAppearanceStore = OverlayAppearanceStore(), mappingStore: KeyMappingStore = KeyMappingStore(),
+         iconOverrides: [String: NSImage] = [:]) {
+        self.appearance = appearance
+        self.mappingStore = mappingStore
+        self.iconOverrides = iconOverrides
         panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 478),
             styleMask: [.borderless], backing: .buffered, defer: false
         )
         panel.isFloatingPanel = true
+        panel.title = "AppSwitcher"
+        panel.isMovable = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
@@ -48,22 +65,29 @@ final class OverlayPanel {
         keyMap: [Key: Candidate], mode: OverlayMode = .applications,
         isLoading: Bool = false, message: String? = nil, rememberPrevious: Bool = true
     ) {
+        let isNewPresentation = !panel.isVisible
         if rememberPrevious, !panel.isVisible {
             previousApp = NSWorkspace.shared.frontmostApplication
             let mouse = NSEvent.mouseLocation
             presentationScreen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         }
         update(keyMap: keyMap, mode: mode, isLoading: isLoading, message: message)
+        if isNewPresentation { sizeToScreen() }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
     }
 
-    func update(keyMap: [Key: Candidate], mode: OverlayMode, isLoading: Bool = false, message: String? = nil) {
+    func update(keyMap: [Key: Candidate], mode: OverlayMode, isLoading: Bool = false, message: String? = nil, isSuccess: Bool = false) {
+        let selectedID = selectedKey.flatMap { self.keyMap[$0]?.id }
         self.keyMap = keyMap
         self.mode = mode
         self.isLoading = isLoading
         self.message = message
+        feedbackIsSuccess = isSuccess
         let available = Set(keyMap.keys)
+        if let selectedID, let movedKey = keyMap.first(where: { $0.value.id == selectedID })?.key {
+            selectedKey = movedKey
+        }
         if selectedKey == nil || !available.contains(selectedKey!) {
             selectedKey = KeyNavigation.ordered(available).first
         }
@@ -71,11 +95,12 @@ final class OverlayPanel {
             guard let bundle = app.bundleIdentifier, let icon = app.icon else { return nil }
             return (bundle, AppIconImage.prepared(icon))
         }, uniquingKeysWith: { first, _ in first })
+        icons.merge(iconOverrides, uniquingKeysWith: { _, preview in preview })
         render()
-        sizeToScreen()
     }
 
     func hide(restorePrevious: Bool, clear: Bool = true) {
+        isDraggingKey = false
         panel.orderOut(nil)
         if clear {
             keyMap = [:]
@@ -92,6 +117,7 @@ final class OverlayPanel {
     }
 
     private func render() {
+        let notices = [appearance.notice, mappingStore.notice].compactMap { $0 }.joined(separator: " ")
         let view = OverlayView(
             keyMap: keyMap, icons: icons, mode: mode, selectedKey: selectedKey,
             isLoading: isLoading, message: message,
@@ -99,8 +125,22 @@ final class OverlayPanel {
             onActivate: { [weak self] key in self?.activate(key) },
             onToggleMode: { [weak self] in self?.onToggleMode?() },
             onCancel: { [weak self] in self?.onCancel?(true) },
-            onSettings: { [weak self] in self?.onSettings?() }
+            onSettings: { [weak self] in self?.onSettings?() },
+            onMoveEnded: { [weak self] in self?.finishMoving() },
+            style: appearance.style,
+            onChangeStyle: { [weak self] style in self?.changeStyle(style) },
+            appearanceNotice: notices.isEmpty ? nil : notices,
+            onRemap: onRemap,
+            onDragStateChanged: { [weak self] dragging in self?.isDraggingKey = dragging },
+            savedBindings: mappingStore.preferences.bindings,
+            showsDragGuide: mappingStore.preferences.showsDragGuide,
+            onChangeDragGuide: { [weak self] enabled in self?.setDragGuide(enabled) },
+            guideRevision: guideRevision,
+            interactionRevision: interactionRevision,
+            onResetBindings: onResetBindings,
+            feedbackIsSuccess: feedbackIsSuccess
         )
+        panel.appearance = NSAppearance(named: appearance.style == .porcelain ? .aqua : .darkAqua)
         if let hostingView { hostingView.rootView = view }
         else {
             let host = NSHostingView(rootView: view)
@@ -110,14 +150,27 @@ final class OverlayPanel {
     }
 
     private func select(_ key: Key) {
-        guard !isLoading, keyMap[key] != nil, selectedKey != key else { return }
+        guard !isLoading, !isDraggingKey, keyMap[key] != nil, selectedKey != key else { return }
         selectedKey = key
         render()
     }
 
+    func changeStyle(_ style: OverlayStyle) {
+        appearance.select(style)
+        // Render only: never rebuild the snapshot, move the frame, or change the selection.
+        if panel.isVisible { render() }
+    }
+
     private func activate(_ key: Key) {
-        guard !isLoading, keyMap[key] != nil else { return }
+        guard !isLoading, !isDraggingKey, keyMap[key] != nil else { return }
         onKey?(key)
+    }
+
+    private func setDragGuide(_ enabled: Bool) {
+        var next = mappingStore.preferences
+        next.showsDragGuide = enabled
+        if mappingStore.save(next) { guideRevision += 1 }
+        render()
     }
 
     private func sizeToScreen() {
@@ -131,9 +184,26 @@ final class OverlayPanel {
         ), display: true)
     }
 
+    private func finishMoving() {
+        guard panel.isVisible else { return }
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+            ?? panel.screen else { return }
+        presentationScreen = screen
+        panel.setFrame(OverlayPlacement.fittedFrame(panel.frame, in: screen.visibleFrame), display: true)
+    }
+
     private func installEventMonitors() {
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard let self, self.panel.isVisible, self.panel.isKeyWindow else { return event }
+            if self.isDraggingKey && event.keyCode != 53 { return nil }
+            self.interactionRevision += 1
+            self.render()
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            if modifiers == .command, let index = [UInt16(18), 19, 20].firstIndex(of: event.keyCode) {
+                if !event.isARepeat { self.changeStyle(OverlayStyle.allCases[index]) }
+                return nil
+            }
             if event.keyCode != 53 && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty { return event }
             switch event.keyCode {
             case 53: self.onCancel?(true)

@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import AppSwitcherCore
+import AppSwitcherKit
 import Darwin
 
 /// 只注册四修饰 F17–F19，不生成键盘事件、不唤起用户应用，结束释放全部注册。
@@ -69,6 +70,7 @@ enum ShortcutRegistrationProbe {
             try manager.replace(with: blocked)
             manager.stop()
             try require(isAvailable(blocked), "子进程注销后组合可重新注册并释放")
+            try verifyControllerRecovery()
             print("PASS shortcuts: Carbon 排他冲突、事务回滚和释放验证通过；非排他冲突边界见 NOTE。")
             return 0
         } catch ProbeError.assertion(let message) {
@@ -78,6 +80,54 @@ enum ShortcutRegistrationProbe {
             print("FAIL shortcuts: \(error.localizedDescription)")
             return 1
         }
+    }
+
+    private static func verifyControllerRecovery() throws {
+        let manager = GlobalHotKey.shared
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AppSwitcher-shortcut-recovery-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { manager.stop(); try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("shortcuts.json")
+        let store = ShortcutStore(fileURL: file)
+        try store.save(ShortcutPreferences(hotKey: blocked, sequenceEnabled: false))
+        let holder = try Holder(shortcut: blocked, options: UInt32(kEventHotKeyExclusive))
+        defer { holder.stop() }
+
+        let controller = ShortcutController(fileURL: file)
+        controller.start()
+        try require(manager.currentShortcut == nil && controller.statusMessage != nil,
+                    "启动时已保存组合被占用，控制器明确记录不可用")
+        try require(controller.beginRecording() == nil && controller.isRecording,
+                    "旧组合不可用时仍可开始录制新组合")
+        try require(controller.endRecording() == nil && !controller.isRecording,
+                    "结束录制不把启动时旧组合冲突误报为本次录制失败")
+        try require(controller.statusMessage != nil && manager.currentShortcut == nil,
+                    "新组合保存前仍如实保留旧绑定不可用状态")
+
+        let proposed = ShortcutPreferences(hotKey: replacement, sequenceEnabled: false)
+        try require(controller.save(proposed) == nil && controller.statusMessage == nil && isOccupied(replacement),
+                    "从不可用旧组合恢复：新组合保存并注册成功")
+        let saved = try store.load()
+        try require(saved?.hotKey == replacement && saved?.sequenceEnabled == false,
+                    "恢复后新组合已真实持久化")
+        manager.stop()
+        let restarted = ShortcutController(fileURL: file)
+        restarted.start()
+        try require(restarted.statusMessage == nil && manager.currentShortcut == replacement && isOccupied(replacement),
+                    "控制器重建后恢复保存的新组合")
+
+        try require(restarted.beginRecording() == nil, "成功绑定可以再次录制")
+        var blocker: EventHotKeyRef?
+        let result = registerRaw(replacement, reference: &blocker)
+        guard result == noErr, blocker != nil else { throw ProbeError.assertion("无法构造控制器恢复冲突") }
+        defer { if let blocker { _ = UnregisterEventHotKey(blocker) } }
+        try require(restarted.endRecording() != nil && restarted.statusMessage != nil,
+                    "真正的原快捷键恢复失败仍然返回错误")
+        if let blocker { _ = UnregisterEventHotKey(blocker) }
+        blocker = nil
+        try require(restarted.beginRecording() == nil && restarted.endRecording() == nil,
+                    "冲突释放后可以恢复原绑定并结束录制")
     }
 
     private static func require(_ condition: Bool, _ message: String) throws {

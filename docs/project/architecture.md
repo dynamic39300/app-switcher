@@ -27,4 +27,6 @@
 
 ## FEAT-002 商业服务扩展（2026-09-25）
 
+2026-09-27 应用选择键扩展：Core `KeyRemapping` 与 `KeyAssigner` 保证唯一性和固定优先；Kit `KeyMappingStore` 原子保存独立 schema v1 的应用键位/引导偏好；App 负责局部手势、会话守卫和演示。未引入依赖或新的系统权限，窗口内容仍不持久化，见[ADR-0003](../adr/0003-application-key-bindings.md)。
+
 早期无账号/无网络描述保留为 0.3.2 本地基线。用户授权后新增 Django 单体服务、PostgreSQL生产存储、原生网站，以及 Mac 账号/Keychain/固定公钥离线验证模块。窗口控制仍本机执行，窗口标题、按键、使用统计不上网。商业制品须通过授权门禁，开发本地版与正式分发配置隔离。结构、威胁和接口见 [DESIGN-002](../features/FEAT-002-commercialization/design.md)、[CONTRACT-002](../features/FEAT-002-commercialization/contract.md) 和 [ADR-0002](../adr/0002-commercial-service-and-local-license.md)。实际完成范围以 QA-002 为准。

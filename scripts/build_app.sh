@@ -30,9 +30,11 @@ APP="$STAGING_DIR/AppSwitcher.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swift scripts/generate_app_icon.swift "$STAGING_DIR/AppIcon.iconset"
 iconutil -c icns "$STAGING_DIR/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
+cp -X assets/branding/menu-bar-template.png assets/branding/menu-bar-template@2x.png "$APP/Contents/Resources/"
 cp -X "$BINARY_DIR/AppSwitcherApp" "$APP/Contents/MacOS/AppSwitcher"
 cp "$STAGING_DIR/source.json" "$APP/Contents/Resources/build-provenance.json"
 python3 scripts/app_bundle.py plist "$APP/Contents/Info.plist"
+"$APP/Contents/MacOS/AppSwitcher" --verify-branding
 xattr -cr "$APP" 2>/dev/null || true
 
 if [[ "$BUILD_KIND" == "distribution" ]]; then

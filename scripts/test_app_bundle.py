@@ -9,10 +9,27 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app_bundle import BUNDLE_ID, metadata, publish, validate_destination
-from release_manifest import verify_source
+from release_manifest import source_digest, verify_source
 
 
 class BundleBoundaryTests(unittest.TestCase):
+    def test_brand_assets_participate_in_frozen_build_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Package.swift").write_text("fixture")
+            (root / "VERSION").write_text("0.4.1")
+            assets = root / "assets" / "branding"
+            assets.mkdir(parents=True)
+            for name in ("app-icon-master.png", "menu-bar-template.png", "menu-bar-template@2x.png", "render-menu-bar.swift"):
+                (assets / name).write_bytes(b"fixture artwork")
+            with patch("release_manifest.ROOT", root):
+                original = source_digest()
+                (assets / "app-icon-master.png").write_bytes(b"changed artwork")
+                changed = source_digest()
+                self.assertNotEqual(original, changed)
+                with self.assertRaises(ValueError):
+                    verify_source({"sourceSHA256": original, "version": "0.4.1"}, changed, "0.4.1")
+
     def commercial(self):
         return {
             "APPSWITCHER_COMMERCE_MODE": "commercial",

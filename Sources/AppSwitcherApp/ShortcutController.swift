@@ -59,17 +59,20 @@ final class ShortcutController {
     }
 
     func endRecording() -> String? {
-        guard isRecording else { return statusMessage }
+        guard isRecording else { return nil }
         isRecording = false
         SequenceHotKey.shared.recordingSuspended = false
+        var restorationError: String?
         do {
             try hotKey.resume()
             if hotKey.currentShortcut != nil { statusMessage = nil }
         } catch {
             statusMessage = "原快捷键恢复失败：\(error.localizedDescription) 请保存一个可用的新组合。"
+            restorationError = statusMessage
         }
         onChange?()
-        return statusMessage
+        // 启动时旧绑定的冲突仍保留在 settingsStatus，不算本次录制/恢复失败。
+        return restorationError
     }
 
     func save(_ proposed: ShortcutPreferences) -> String? {

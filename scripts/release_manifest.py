@@ -19,6 +19,8 @@ def source_digest():
     if (ROOT / "Package.resolved").exists():
         files.append(ROOT / "Package.resolved")
     files += list((ROOT / "Sources").rglob("*.swift"))
+    for name in ("app-icon-master.png", "menu-bar-template.png", "menu-bar-template@2x.png", "render-menu-bar.swift"):
+        files.append(ROOT / "assets" / "branding" / name)
     for extension in ("*.py", "*.sh", "*.swift"):
         files += list((ROOT / "scripts").glob(extension))
     for path in sorted(files):

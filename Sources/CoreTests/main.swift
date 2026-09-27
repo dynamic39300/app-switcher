@@ -268,6 +268,7 @@ testCandidateFactory()
 testKeyEquality()
 testKeyboardNavigation()
 testShortcutPreferences()
+testKeyRemapping()
 
 print("")
 if failCount == 0 {

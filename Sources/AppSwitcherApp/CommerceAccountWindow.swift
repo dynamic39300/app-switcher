@@ -51,9 +51,7 @@ private struct CommerceAccountView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: CommerceTheme.spacing) {
                 HStack(spacing: 12) {
-                    Image(systemName: "keyboard").font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(CommerceTheme.accent)
-                        .accessibilityHidden(true)
+                    AppBrandMark(size: 48)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("AppSwitcher").font(.title2.bold())
                         Text("少一点寻找，多一点专注").foregroundStyle(CommerceTheme.secondary)

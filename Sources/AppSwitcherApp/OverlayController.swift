@@ -8,7 +8,8 @@ import AppSwitcherKit
 final class OverlayController {
     private let provider: RunningAppsProvider
     private let usage: UsageStore
-    private let panel = OverlayPanel()
+    private let mappingStore: KeyMappingStore
+    private let panel: OverlayPanel
     private var mode: OverlayMode = .applications
     private var appCandidates: [Candidate] = []
     private var loadTask: Task<Void, Never>?
@@ -23,10 +24,15 @@ final class OverlayController {
     init(provider: RunningAppsProvider, usage: UsageStore) {
         self.provider = provider
         self.usage = usage
+        let store = KeyMappingStore()
+        mappingStore = store
+        panel = OverlayPanel(mappingStore: store)
         panel.onKey = { [weak self] key in self?.activate(key) }
         panel.onCancel = { [weak self] restore in self?.dismiss(restore: restore) }
         panel.onToggleMode = { [weak self] in self?.toggleMode() }
         panel.onSettings = { [weak self] in self?.onSettings?() }
+        panel.onRemap = { [weak self] from, to, id in self?.remap(from: from, to: to, candidateID: id) ?? false }
+        panel.onResetBindings = { [weak self] group in self?.resetBindings(for: group) }
     }
 
     func toggle() {
@@ -79,7 +85,37 @@ final class OverlayController {
     }
 
     private func mapping(_ candidates: [Candidate]) -> [Key: Candidate] {
-        KeyAssigner.assign(AppRanker.rank(candidates))
+        KeyAssigner.assign(AppRanker.rank(candidates), preferredKeys: mode == .applications ? mappingStore.preferences.preferredKeys : [:])
+    }
+
+    private func remap(from source: Key, to destination: Key, candidateID: String) -> Bool {
+        guard panel.isVisible, mode == .applications, !isLoading, !isActivating,
+              panel.keyMap[source]?.id == candidateID else { return false }
+        guard let change = KeyRemapping.moving(from: source, to: destination, in: panel.keyMap,
+                                               candidates: appCandidates, preferences: mappingStore.preferences) else {
+            panel.update(keyMap: panel.keyMap, mode: mode, message: "同一应用有多个实例或目标已变化，暂不能更改键位。")
+            return false
+        }
+        guard mappingStore.save(change.preferences) else {
+            panel.update(keyMap: panel.keyMap, mode: mode)
+            return false
+        }
+        let swapped = panel.keyMap[destination] != nil
+        panel.update(keyMap: change.map, mode: mode,
+                     message: "已\(swapped ? "交换" : "移动到") \(destination.label) · 下次唤醒仍保留", isSuccess: true)
+        return true
+    }
+
+    private func resetBindings(for group: String?) {
+        guard panel.isVisible, mode == .applications, !isLoading, !isActivating else { return }
+        var next = mappingStore.preferences
+        if let group { next.bindings.removeValue(forKey: group) }
+        else { next.bindings.removeAll() }
+        guard mappingStore.save(next) else {
+            panel.update(keyMap: panel.keyMap, mode: mode)
+            return
+        }
+        panel.update(keyMap: mapping(appCandidates), mode: mode, message: "已恢复自动分配", isSuccess: true)
     }
 
     private func toggleMode() {

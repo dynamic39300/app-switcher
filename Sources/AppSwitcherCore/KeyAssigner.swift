@@ -7,11 +7,20 @@
 /// 3. 同组后续条目：平铺到上一键右侧最近空闲键（相邻）。
 /// 4. 字母区用尽后落数字行 `1-0 - +`；候选超过键位数时截断。
 public enum KeyAssigner {
-    public static func assign(_ candidates: [Candidate]) -> [Key: Candidate] {
-        let limited = Array(candidates.prefix(Key.all.count))
+    public static func assign(_ candidates: [Candidate], preferredKeys: [String: Key] = [:]) -> [Key: Candidate] {
         var used = Set<Key>()
         var result: [Key: Candidate] = [:]
         var prevKeyByGroup: [String: Key] = [:]
+        let groups = Dictionary(grouping: candidates, by: \.groupID)
+        // A saved application identity must resolve to one app, never an arbitrary window or process.
+        for candidate in candidates where !candidate.isWindow && groups[candidate.groupID]?.count == 1 {
+            guard let key = preferredKeys[candidate.groupID], Key.all.contains(key), !used.contains(key) else { continue }
+            used.insert(key)
+            result[key] = candidate
+            prevKeyByGroup[candidate.groupID] = key
+        }
+        let pinnedIDs = Set(result.values.map(\.id))
+        let limited = candidates.filter { !pinnedIDs.contains($0.id) }.prefix(Key.all.count - result.count)
 
         for candidate in limited {
             let first = firstLetter(of: candidate.displayName)
