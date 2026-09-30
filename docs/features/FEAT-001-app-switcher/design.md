@@ -15,7 +15,9 @@ upstream: [SPEC-001, RES-002]
 
 采用公开 AX 对象作为短期控制身份：枚举时注册对象，Domain / UI 只拿不透明 token。标题只是展示字段，不能作查找键；CG 窗口清单、数字编号、几何相似和 bundle ID 首个实例都不用于猜测目标对象。能力不足的 App 整体保留应用入口；窗口操作失败给中文反馈，不再次隐式尝试别窗。用户已转到无关 App 时保留消息至下次唤出，避免失败面板抢焦点。
 
-App 路径在安装路径与可执行文件身份没有潜在多实例歧义时请求正常 reopen，再校验原进程身份、移交前台并核对 PID；这是 TKT-010 对 0.2.0 仅调用 `activate` 的修正。窗口路径仍只恢复目标最小化状态、设主窗口并抬起，验证前台 PID 与 `AXFocusedWindow` 是否为所选对象。两条路径都不使用 `activateAllWindows`，不批量 AX 恢复同 App 的所有窗口。App 负责响应 reopen 和选择呈现窗口，App 级结果不等于精确窗口或可见性验证。
+App 路径在安装路径与可执行文件身份没有潜在多实例歧义时请求正常 reopen，再校验原进程身份、移交前台并核对 PID；这是 TKT-010 对 0.2.0 仅调用 `activate` 的修正。TKT-020 补充同可执行文件辅助进程场景：仅当同 bundle/executable 的 regular 进程唯一、其他进程身份可读、候选内核启动标识匹配时，直接激活已选 PID，跳过 bundle reopen，随后用公开 CG 窗口所有者、层级、透明度和尺寸确认正常可见窗口；不读取标题或截图，不申请录屏权限，不按微信名称硬编码。无窗口时返回失败，真实多个 regular 实例仍拒绝有歧义的重开。窗口路径仍只恢复目标最小化状态、设主窗口并抬起，验证前台 PID 与 `AXFocusedWindow` 是否为所选对象。两条路径都不使用 `activateAllWindows`，不批量 AX 恢复同 App 的所有窗口。App 负责选择呈现窗口，App 级结果不等于精确窗口或文章标签验证。
+
+TKT-019 的正常退出路径与上述切换路径分离：应用卡片叉携带本轮 `Candidate`，`AppQuitService` 再核对 PID、bundle ID、进程启动时间及 `.regular` 策略，仅将目标进程带到前台后调用 `NSRunningApplication.terminate()`。`ProcessStartTimestamp` 读取内核进程创建时间，以便 LaunchServices `launchDate` 缺失时仍能防 PID 复用；若创建时间无法读取则拒绝退出。退出状态由进程终止状态观察，不因 `terminate()` 返回 true 就宣称已退出。`QuitNoticePanel` 为非激活式轻提示，不遮挡中央原生保存提示；不读取应用文档内容。桌面动作尚无验证通过的公开触发适配器，详见 [UX-001](utility-actions-design-2026-09-28.md)，不以私有 Dock API 或固定系统快捷键补齐。
 
 ## 模块、数据与信任边界
 

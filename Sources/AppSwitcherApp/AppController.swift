@@ -79,7 +79,7 @@ final class AppController: NSObject {
         let show = NSMenuItem(title: "显示切换器", action: #selector(showSwitcher), keyEquivalent: "")
         show.target = self
         menu.addItem(show)
-        let settings = NSMenuItem(title: "快捷键设置…", action: #selector(showShortcutSettings), keyEquivalent: ",")
+        let settings = NSMenuItem(title: "设置…", action: #selector(showShortcutSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
         let permission = NSMenuItem(title: "辅助功能设置…", action: #selector(openAccessibilitySettings), keyEquivalent: "")

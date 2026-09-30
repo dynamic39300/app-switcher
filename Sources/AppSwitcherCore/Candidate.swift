@@ -31,6 +31,8 @@ public struct Candidate: Hashable, Identifiable, Sendable {
     public let windowCount: Int
     /// 绑定到产生此候选时的进程实例，避免后续快照覆盖旧候选的启动时间。
     public let processLaunchDate: Date?
+    /// Kernel process start timestamp in microseconds; available when LaunchServices has no launch date.
+    public let processStartTimestamp: UInt64?
     public let activationCount: Int
     public let lastActivatedAt: Date
 
@@ -48,7 +50,8 @@ public struct Candidate: Hashable, Identifiable, Sendable {
         lastActivatedAt: Date = .distantPast,
         target: CandidateTarget = .application(pid: 0),
         windowCount: Int = 0,
-        processLaunchDate: Date? = nil
+        processLaunchDate: Date? = nil,
+        processStartTimestamp: UInt64? = nil
     ) {
         self.id = id
         self.groupID = groupID
@@ -57,6 +60,7 @@ public struct Candidate: Hashable, Identifiable, Sendable {
         self.target = target
         self.windowCount = max(0, windowCount)
         self.processLaunchDate = processLaunchDate
+        self.processStartTimestamp = processStartTimestamp
         self.activationCount = activationCount
         self.lastActivatedAt = lastActivatedAt
     }

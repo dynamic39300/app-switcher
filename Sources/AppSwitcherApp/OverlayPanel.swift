@@ -35,6 +35,7 @@ final class OverlayPanel {
     var onCancel: ((Bool) -> Void)?
     var onToggleMode: (() -> Void)?
     var onSettings: (() -> Void)?
+    var onQuit: ((Key) -> Void)?
     var onRemap: ((Key, Key, String) -> Bool)?
     var onResetBindings: ((String?) -> Void)?
     var isVisible: Bool { panel.isVisible }
@@ -126,6 +127,7 @@ final class OverlayPanel {
             onToggleMode: { [weak self] in self?.onToggleMode?() },
             onCancel: { [weak self] in self?.onCancel?(true) },
             onSettings: { [weak self] in self?.onSettings?() },
+            onQuit: { [weak self] key in self?.onQuit?(key) },
             onMoveEnded: { [weak self] in self?.finishMoving() },
             style: appearance.style,
             onChangeStyle: { [weak self] style in self?.changeStyle(style) },
@@ -202,6 +204,10 @@ final class OverlayPanel {
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers == .command, let index = [UInt16(18), 19, 20].firstIndex(of: event.keyCode) {
                 if !event.isARepeat { self.changeStyle(OverlayStyle.allCases[index]) }
+                return nil
+            }
+            if modifiers == .command, event.keyCode == 43 {
+                if !event.isARepeat { self.onSettings?() }
                 return nil
             }
             if event.keyCode != 53 && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty { return event }

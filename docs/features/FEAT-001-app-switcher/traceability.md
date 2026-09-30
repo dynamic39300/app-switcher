@@ -7,6 +7,8 @@ upstream: [SPEC-001]
 
 # TRACE-001：追溯矩阵
 
+2026-09-30：AC-05/07 → TKT-020 → TEST-022，同可执行文件辅助进程下直接激活已选界面实例；0.5.2 本机安装与隔离回归完成，真实文章页复测待 owner。证据见[微信文章浏览器修复](wechat-browser-fix-0.5.2.md)。
+
 上游：[SPEC-001](spec.md)、[DESIGN-001](design.md)、[TASKS-001](tasks.md)、[QA-001](test-plan.md)。稳定 ID 链：`PRD-001 → SPEC-001/AC-xx → TKT-00x → TEST-0xx`。2026-09-24 行为变更依据 owner 对 [RES-002](multi-window-research-2026-09-24.md) 建议的接受与系统修改授权。
 
 ## AC 到设计 / Ticket / 测试
@@ -31,6 +33,8 @@ upstream: [SPEC-001]
 ## 状态与证据边界
 
 AC-16/17/18 → `KeyRemapping` / `KeyAssigner` / `KeyMappingStore` / `OverlayController` / `OverlayPanel` / `OverlayView` / `KeyDragVisual` → TKT-018 → TEST-019（CoreTests + 独立交互夹具 + 制品检查）；证据见[拖拽记录](key-drag-2026-09-27.md)。
+
+AC-19/20 → `OverlayView` / `OverlayPanel` / `OverlayController` / `AppQuitService` / `QuitNoticePanel` / `ProcessStartTimestamp` → TKT-019 → TEST-020。AC-21 → TKT-019 桌面技术门槛 → TEST-021；当前未实现、不暴露伪桌面按钮。
 
 AC-15 → `OverlayAppearanceStore` / `OverlayStyle` / `OverlayPalette` / `MaterialKeycapStyle` / `OverlayPanel` → TKT-017 → TEST-018；同时回归 AC-10 / AC-14。证据统一见[三主题记录](appearance-themes-2026-09-26.md)。
 

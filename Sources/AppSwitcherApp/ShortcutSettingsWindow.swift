@@ -36,7 +36,7 @@ final class ShortcutSettingsWindow: NSObject, NSWindowDelegate {
             styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false
         )
         super.init()
-        window.title = "AppSwitcher 快捷键设置"
+        window.title = "AppSwitcher 设置 · 快捷键"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = NSColor(OverlayTheme.background)

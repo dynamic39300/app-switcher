@@ -1,6 +1,14 @@
 # 命令索引
 
-## 当前：0.5.0 图标拖拽与唤醒引导（2026-09-27）
+## 0.5.2 微信文章浏览器修复（2026-09-30，当前本机版）
+
+当前安装 `/Applications/AppSwitcher.app`，0.5.2 Release/local，保留个人设置。`--verify-app-activation` 现为 10 项，新增同可执行文件 accessory 共存及内核启动标识回归。Debug 与候选 Release 10/10，CoreTests 112/112；精确窗口探针在新旧版本均有焦点断言失败，真实文章页最终复测待 owner。构建、安装、摘要、回退和验证边界见[0.5.2 交付](../features/FEAT-001-app-switcher/wechat-browser-fix-0.5.2.md)。下列 0.5.1 及更早记录为历史。
+
+## 当前：0.5.1 本机测试版已安装运行（2026-09-28）
+
+唯一活动安装位于 `/Applications/AppSwitcher.app`，从 `~/Downloads/AppSwitcher-0.5.1-local-test-20260928.dmg` 实际提取并启动；旧的系统与个人 Applications 副本均已移入备份。启动：`open /Applications/AppSwitcher.app`。面板使用现有保存的唤出键（本机安装时为 ⌘E），顶部有「设置」，面板内 `⌘,` 打开同一设置窗；应用模式鼠标移到卡片上会显示独立退出叉。当前不含显示桌面按钮。本机包为 Release/local/arm64、ad-hoc 签名、未公证，不能当作官网正式分发包。安装、验证与回退见[0.5.1 本机交付](../features/FEAT-001-app-switcher/local-utility-release-0.5.1.md)。以下为历史命令和记录，不代替当前安装核对。
+
+## 0.5.0 图标拖拽与唤醒引导（2026-09-27，历史）
 
 已从本地 DMG 安装 `~/Applications/AppSwitcher.app` 并启动。安装时读取的当前组合为 ⌘J、F→J 开启，主题石墨；本轮安装不改这些设置。应用模式中拖到空键移动、拖到已有图标的键交换，落位后自动保存；“不再提示”跨重启保留，顶部手形菜单可重播/重新开启及恢复默认键位。键位独立存于 `~/Library/Application Support/AppSwitcher/key-mapping.json`，窗口模式不保存临时窗口键位。
 
@@ -44,6 +52,7 @@
 | 面板拖动验证 | `.build/debug/AppSwitcherApp --verify-overlay-drag` | 显式生成鼠标/定向键盘事件，只操作合成面板；验证拖动、双屏适配、更新保持与按钮/键盘回归。需系统事件发送权限，未授权 exit 2；单屏会说明未执行实际跨屏；Release 包支持同入口 |
 | 隔离 AX 集成 | `.build/debug/AppSwitcherApp --verify-window-switching` | 父子进程仅控制本工具创建的合成窗口；0=通过、1=失败、2=权限不足跳过，跳过不是通过；不自动申请权限 |
 | 隔离应用唤起回归 | `.build/debug/AppSwitcherApp --verify-app-activation` | 在临时目录创建独立合成 App，验证同包 helper 下四种窗口状态及同 exe 真多实例拒绝；不操作用户应用 |
+| 隔离应用退出回归 | `.build/debug/AppSwitcherApp --verify-app-quit` | 在临时目录创建普通合成 App；验证进程身份拒绝、目标取消正常退出、随后实际结束以及提示不抢焦点；不操作用户应用 |
 | 本地 release 打包 | `./scripts/build_app.sh` | 临时目录组装签名后复制到 `build/AppSwitcher.app` 并严格验签，优先 `AppSwitcher Dev` 自签名，否则 ad-hoc；不是对外发布/公证 |
 | 本机非同步目录打包（构建记录） | `APPSWITCHER_OUTPUT="$HOME/Applications/AppSwitcher-0.3.1.app" ./scripts/build_app.sh` | TKT-012 实际执行的历史候选构建命令；该包随后改名安装到 `~/Applications/AppSwitcher.app`。避开 Documents 后续附加 FinderInfo 的问题 |
 | 制品 App 唤起验证 | `"$HOME/Applications/AppSwitcher.app/Contents/MacOS/AppSwitcher" --verify-app-activation` | 验证最终安装的 Release；四种合成窗口状态加真多实例，共五场景，不代表第三方现场验收 |

@@ -8,7 +8,7 @@
 
 - 开发服务：`web/`，Django + Python 3.12，默认文件邮件/SQLite，不向真实收件人发信；模拟支付须显式开启，只在 development 可用。
 - 生产服务：独立账号/数据库/密钥，真实经营域名 HTTPS、SMTP 发件、PostgreSQL TLS verify-full；环境变量及服务边界见 [web README](../../web/README.md) 与[示例配置](../../web/.env.example)。示例不自动载入，不含秘密。
-- Mac：本机既有 0.3.2 继续可用；候选 0.4.0 与其隔离，Debug localhost 包不进入官网下载。
+- Mac：2026-09-28 实际安装为 0.5.0 local/ad-hoc，仅供本机测试；Debug localhost 包不进入官网下载。
 - 管理后台只开放给实际负责的运营人员，使用独立运维登录、来源访问约束；普通邮箱 OTP 登录不能登录 staff 后台。退款权限单独授予，工单人员不同时得到修改账号角色权限。
 
 ## 服务部署顺序
@@ -33,16 +33,19 @@ Linux/systemd/nginx 配置当前仅完成静态设计；本机是 macOS，没有
 - `APPSWITCHER_SERVICE_URL`：自己的正式 HTTPS origin。
 - `APPSWITCHER_LICENSE_PUBLIC_KEY`：服务端正式 Ed25519 公钥原始 32 字节的 base64；这是公开验证材料，私钥不能进 App。
 - `APPSWITCHER_SIGN_IDENTITY`：钥匙串中实际存在的 `Developer ID Application: …`。
+- `APPSWITCHER_INSTALLER_SIGN_IDENTITY`：PKG 主下载所需、同一 Team ID 的 `Developer ID Installer: …`；现有 DMG 脚本不使用。
 - `APPSWITCHER_NOTARY_PROFILE`：本人预先保存在 Keychain 的公证认证配置名，密码不放在命令行。
 - 可选 `APPSWITCHER_RELEASE_DIR`：新输出目录；脚本拒绝覆盖已有发布记录。
 
-执行 `./scripts/release_macos.sh`。脚本固定 commercial/release、arm64、Hardened Runtime 与安全时间戳；生成带 Applications 链接和安装说明的 UDZO DMG、签名、公证、附票据、Gatekeeper 检查；保留 Apple receipt/log、制品 SHA256 和源码摘要。构建前冻结版本/源码摘要，编译后核对源码及 Mach-O 架构，公证后只使用包内已签名的冻结记录生成 manifest。`preSigningExecutableSHA256` 是签名前的可执行文件摘要，最终下载完整性使用附票据后的 DMG SHA256。工具提交超时后 Apple 可能继续处理，须凭已记录 submission ID 查询，不重复盲目提交。
+主下载候选执行 `./scripts/release_macos_pkg.sh`：脚本固定 commercial/release、arm64、Hardened Runtime 与安全时间戳；以同一 Apple Team 的 Application 身份签 App、Installer 身份签 PKG，公证 PKG、附票据并执行 Gatekeeper 安装检查，保留 Apple receipt/log、制品 SHA256 和源码摘要。PKG 双击会启动 macOS 安装器，用户仍需按系统提示确认，首次使用仍需辅助功能授权。现有 `./scripts/release_macos.sh` 可生成 DMG 备选候选；DMG 双击只挂载，用户需拖拽 App 到“应用程序”，不满足主下载的双击安装目标。两条发布脚本均未持有真实 Developer ID 时完成端到端验证，不能把脚本存在当作正式制品就绪。
 
-裸 `.app` 在私有临时目录完成构建和封装，避免本机 Documents/File Provider 给应用包异步增加 FinderInfo 而使验签失败。本地测试包也优先放非同步目录；“刚构建时验签通过”不能代替最终输出再次验签。正式输出保留 DMG 与证据，不把同步目录中的裸 App 作为官网下载品。
+构建前冻结版本/源码摘要，编译后核对源码及 Mach-O 架构，公证后只使用包内已签名的冻结记录生成 manifest。`preSigningExecutableSHA256` 是签名前的可执行文件摘要，最终下载完整性使用附票据后的安装包 SHA256。工具提交超时后 Apple 可能继续处理，须凭已记录 submission ID 查询，不重复盲目提交。
 
-公证超时/失败时，以相同 Keychain profile 执行 `xcrun notarytool info <submission-id>` 和 `xcrun notarytool log <submission-id>`；只有 Accepted 且日志已检查后再对原 DMG staple/validate、执行 Gatekeeper 检查并生成 manifest。拒绝/待审制品绝不登记下载。正式步骤依据 [Apple 公证要求](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)、[自定义流程](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)和[包装分发](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)。
+裸 `.app` 在私有临时目录完成构建和封装，避免本机 Documents/File Provider 给应用包异步增加 FinderInfo 而使验签失败。本地测试包也优先放非同步目录；“刚构建时验签通过”不能代替最终输出再次验签。正式输出保留 PKG 或 DMG 与证据，不把同步目录中的裸 App 作为官网下载品。
 
-拿到最终 DMG 后，从实际 HTTPS 下载入口在独立 Mac 验首次下载、拖入 Applications、启动、辅助功能、登录、首次切换；再从前版升级并比较偏好。签名身份变化可能引起系统重新请求权限，必须实际验证说明，不能让用户关闭安全保护。验证失败时从官网撤下候选登记并保留已知可用包；配置目录不删除。验证记录通过后由管理员登记 Release 的版本、HTTPS 下载地址和 SHA256，勾选已验正式签名与公证；该勾选不是自动验收替代品。
+公证超时/失败时，以相同 Keychain profile 执行 `xcrun notarytool info <submission-id>` 和 `xcrun notarytool log <submission-id>`；只有 Accepted 且日志已检查后再对原 PKG 或 DMG staple/validate、执行 Gatekeeper 检查并生成 manifest。拒绝/待审制品绝不登记下载。正式步骤依据 [Apple 公证要求](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)、[自定义流程](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)和[包装分发](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)。
+
+拿到最终 PKG 后，从实际 HTTPS 下载入口在独立 Mac 验首次下载、双击运行安装器、启动、辅助功能、登录、首次切换；再从前版升级并比较偏好。签名身份变化可能引起系统重新请求权限，必须实际验证说明，不能让用户关闭安全保护。验证失败时从官网撤下候选登记并保留已知可用包；配置目录不删除。验证记录通过后由管理员登记 Release 的版本、HTTPS 下载地址和 SHA256，勾选已验正式签名与公证；该勾选不是自动验收替代品。
 
 检查更新首版采用 App 内检测新版、跳转可信官网的安装说明与下载；无静默执行远程安装器。升级前退出旧 App，替换应用包后重开，用户配置和 Keychain 凭证不放在包中。当前阶段没有证明真实普通用户升级已经通过。
 

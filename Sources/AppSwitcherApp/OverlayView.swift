@@ -23,6 +23,7 @@ struct OverlayView: View {
     let onToggleMode: () -> Void
     let onCancel: () -> Void
     var onSettings: (() -> Void)? = nil
+    var onQuit: ((Key) -> Void)? = nil
     var onMoveEnded: (() -> Void)? = nil
     var style: OverlayStyle = .graphite
     var onChangeStyle: ((OverlayStyle) -> Void)? = nil
@@ -36,6 +37,7 @@ struct OverlayView: View {
     var interactionRevision = 0
     var onResetBindings: ((String?) -> Void)? = nil
     var feedbackIsSuccess = false
+    var previewQuitControls = false
 
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -51,6 +53,8 @@ struct OverlayView: View {
     @State private var guideStopped = false
     @State private var lastGuideRevision: Int?
     @State private var confirmsReset = false
+    @State private var hoveredQuitKey: Key?
+    @AccessibilityFocusState private var accessibilityFocusedQuitKey: Key?
     @Namespace private var keyMotion
 
     private var hasNumberRow: Bool { keyMap.keys.contains { !$0.isLetter } }
@@ -128,7 +132,7 @@ struct OverlayView: View {
         .onChange(of: keyViewport) { _, _ in if guide != nil { stopGuide() } }
         .onChange(of: keyFrames) { _, _ in if guide != nil { stopGuide() } }
         .onChange(of: style) { _, _ in stopGuide(); cancelDrag() }
-        .onChange(of: mode) { _, _ in stopGuide(); cancelDrag() }
+        .onChange(of: mode) { _, _ in stopGuide(); cancelDrag(); hoveredQuitKey = nil }
         .onDisappear { cancelDrag(); stopGuide() }
         .task(id: KeyGuideRequest(enabled: showsDragGuide, revision: guideRevision, mode: mode)) { await playGuide() }
         .task(id: landingKey) {
@@ -157,15 +161,16 @@ struct OverlayView: View {
             .background(palette.base.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
             if let onSettings {
                 Button(action: onSettings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 15))
+                    Label("设置", systemImage: "gearshape")
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(palette.secondaryText)
-                        .frame(width: 28, height: 28)
+                        .padding(.horizontal, 8)
+                        .frame(height: 28)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("快捷键设置")
-                .accessibilityLabel("快捷键设置")
+                .help("打开设置（⌘,）")
+                .accessibilityLabel("设置，打开快捷键设置")
             }
             Button(action: onCancel) {
                 Image(systemName: "xmark")
@@ -361,34 +366,60 @@ struct OverlayView: View {
     @ViewBuilder
     private func keycap(_ key: Key, width: CGFloat, height: CGFloat) -> some View {
         if let candidate = keyMap[key] {
-            Button { if draggedKey == nil { stopGuide(); onActivate(key) } } label: {
-                populatedKeycap(key, candidate: candidate, width: max(1, width - 8), height: max(1, height - 10))
-            }
-            .buttonStyle(MaterialKeycapStyle(style: style, selected: selectedKey == key))
-            .disabled(isLoading)
-            .opacity(draggedKey?.source == key ? 0.3 : 1)
-            .highPriorityGesture(keyDrag(from: key, candidate: candidate), including: canRemap ? .all : .none)
-            .onHover { inside in
-                if inside && draggedKey == nil { onSelect(key) }
-            }
-            .help(accessibilityTitle(candidate, key: key))
-            .accessibilityLabel(accessibilityTitle(candidate, key: key))
-            .accessibilityHint(candidate.isWindow ? "切换到这个窗口" : "切换到这个应用")
-            .accessibilityAddTraits(selectedKey == key ? .isSelected : [])
-            .contextMenu {
-                if canRemap {
-                    Menu("移到按键") {
-                        ForEach(Key.all, id: \.label) { destination in
-                            Button(destination.label) { stopGuide(); _ = onRemap?(key, destination, candidate.id) }
-                                .disabled(destination == key)
+            ZStack(alignment: .topTrailing) {
+                Button { if draggedKey == nil { stopGuide(); onActivate(key) } } label: {
+                    populatedKeycap(key, candidate: candidate, width: max(1, width - 8), height: max(1, height - 10))
+                }
+                .buttonStyle(MaterialKeycapStyle(style: style, selected: selectedKey == key))
+                .disabled(isLoading)
+                .opacity(draggedKey?.source == key ? 0.3 : 1)
+                .highPriorityGesture(keyDrag(from: key, candidate: candidate), including: canRemap ? .all : .none)
+                .help(accessibilityTitle(candidate, key: key))
+                .accessibilityLabel(accessibilityTitle(candidate, key: key))
+                .accessibilityHint(candidate.isWindow ? "切换到这个窗口" : "切换到这个应用")
+                .accessibilityAddTraits(selectedKey == key ? .isSelected : [])
+                .contextMenu {
+                    if canRemap {
+                        Menu("移到按键") {
+                            ForEach(Key.all, id: \.label) { destination in
+                                Button(destination.label) { stopGuide(); _ = onRemap?(key, destination, candidate.id) }
+                                    .disabled(destination == key)
+                            }
                         }
-                    }
-                    if savedBindings[candidate.groupID] != nil {
-                        Button("恢复自动分配", systemImage: "arrow.uturn.backward") {
-                            stopGuide(); onResetBindings?(candidate.groupID)
+                        if savedBindings[candidate.groupID] != nil {
+                            Button("恢复自动分配", systemImage: "arrow.uturn.backward") {
+                                stopGuide(); onResetBindings?(candidate.groupID)
+                            }
                         }
                     }
                 }
+                if mode == .applications, onQuit != nil, !isLoading, draggedKey == nil,
+                   candidate.groupID != "com.apple.finder" {
+                    Button {
+                        stopGuide()
+                        onQuit?(key)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(palette.warning)
+                            .frame(width: 28, height: 28)
+                            .background(palette.base.opacity(0.94), in: RoundedRectangle(cornerRadius: 8))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(3)
+                    .opacity(hoveredQuitKey == key || accessibilityFocusedQuitKey == key || previewQuitControls ? 1 : 0.01)
+                    .allowsHitTesting(hoveredQuitKey == key || accessibilityFocusedQuitKey == key || previewQuitControls)
+                    .help("退出「\(candidate.displayName)」应用（关闭所有窗口）")
+                    .accessibilityLabel("退出「\(candidate.displayName)」应用，关闭所有窗口")
+                    .accessibilityFocused($accessibilityFocusedQuitKey, equals: key)
+                }
+            }
+            .onHover { inside in
+                if inside && draggedKey == nil {
+                    hoveredQuitKey = key
+                    onSelect(key)
+                } else if hoveredQuitKey == key { hoveredQuitKey = nil }
             }
         } else {
             VStack {
@@ -421,6 +452,7 @@ struct OverlayView: View {
         // 先为两行名称、窗口说明留位，剩余空间再用于图标；不再按固定 64pt 封顶。
         let detailHeight = candidate.isWindow ? detailSize * 2.5 : (mode == .windows ? detailSize * 1.25 : 0)
         let textHeight = nameSize * 2.5 + detailHeight + spacing * (detailHeight > 0 ? 2 : 1)
+        let topReserve: CGFloat = 8
         let preferredIconSize = max(18, min(width * 0.68, height * 0.52, height - 16 - textHeight))
         let inlineKeyLabel = width < 70 || (height - preferredIconSize - textHeight) / 2 < keyLabelSize(width: width) + 20
         let keyLabelWidth = ceil(keyLabelSize(width: width) * 0.75)
@@ -430,12 +462,10 @@ struct OverlayView: View {
             if inlineKeyLabel {
                 // 图标接近右上角键标时改为并排，短屏和长标题也不互相遮挡。
                 HStack(alignment: .top, spacing: 2) {
+                    if mode == .applications { keyLabel(key, width: width, selected: isSelected).frame(width: keyLabelWidth) }
                     appIcon(candidate, size: iconSize).matchedGeometryEffect(id: candidate.id, in: keyMotion)
                         .frame(maxWidth: .infinity)
-                    Text(key.label)
-                        .font(.system(size: keyLabelSize(width: width), weight: .semibold, design: .monospaced))
-                        .foregroundStyle(isSelected ? palette.primary : palette.secondaryText)
-                        .frame(width: keyLabelWidth)
+                    if mode == .windows { keyLabel(key, width: width, selected: isSelected).frame(width: keyLabelWidth) }
                 }
             } else {
                 appIcon(candidate, size: iconSize).matchedGeometryEffect(id: candidate.id, in: keyMotion)
@@ -464,19 +494,24 @@ struct OverlayView: View {
             }
         }
         .padding(.horizontal, 7)
-        .padding(.vertical, 8)
+        .padding(.top, topReserve)
+        .padding(.bottom, 8)
         .frame(width: width, height: height)
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: mode == .applications ? .topLeading : .topTrailing) {
             if !inlineKeyLabel {
-                Text(key.label)
-                    .font(.system(size: keyLabelSize(width: width), weight: .semibold, design: .monospaced))
-                    .foregroundStyle(isSelected ? palette.primary : palette.secondaryText)
+                keyLabel(key, width: width, selected: isSelected)
                     .padding(10)
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: OverlayTheme.hoverDuration), value: isSelected)
         .contentShape(RoundedRectangle(cornerRadius: OverlayTheme.keyRadius))
         .accessibilityElement(children: .ignore)
+    }
+
+    private func keyLabel(_ key: Key, width: CGFloat, selected: Bool) -> some View {
+        Text(key.label)
+            .font(.system(size: keyLabelSize(width: width), weight: .semibold, design: .monospaced))
+            .foregroundStyle(selected ? palette.primary : palette.secondaryText)
     }
 
     @ViewBuilder

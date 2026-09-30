@@ -51,10 +51,12 @@ enum AppActivationProbe {
         if let index = args.firstIndex(of: "--app-probe-fixture"), args.count > index + 1 {
             return Int(await fixture(driverExecutable: args[index + 1]))
         }
-        let processRole = args.contains("--app-probe-second-instance") ? "--app-probe-second-instance" : "--app-probe-helper"
+        let processRole = args.contains("--app-probe-accessory") ? "--app-probe-accessory"
+            : args.contains("--app-probe-second-instance") ? "--app-probe-second-instance" : "--app-probe-helper"
         if let index = args.firstIndex(of: processRole), args.count > index + 1,
            let pid = pid_t(args[index + 1]), pid == getppid() {
-            NSApp.setActivationPolicy(processRole == "--app-probe-helper" ? .prohibited : .regular)
+            NSApp.setActivationPolicy(processRole == "--app-probe-helper" ? .prohibited
+                                      : processRole == "--app-probe-accessory" ? .accessory : .regular)
             let deadline = ContinuousClock.now.advanced(by: .seconds(60))
             while ContinuousClock.now < deadline,
                   let parent = NSRunningApplication(processIdentifier: pid), !parent.isTerminated {
@@ -136,6 +138,7 @@ enum AppActivationProbe {
         let child = Process()
         let helper = Process()
         let secondInstance = Process()
+        let accessory = Process()
         helper.executableURL = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/Helper")
         helper.arguments = ["--verify-app-activation", "--app-probe-helper", String(getpid())]
         helper.standardOutput = FileHandle.nullDevice
@@ -149,6 +152,7 @@ enum AppActivationProbe {
             if child.isRunning { child.terminate() }
             if helper.isRunning { helper.terminate() }
             if secondInstance.isRunning { secondInstance.terminate() }
+            if accessory.isRunning { accessory.terminate() }
             target.close()
             secondary.close()
             if mayRestore { _ = previousFrontmost?.activate(options: []) }
@@ -204,6 +208,20 @@ enum AppActivationProbe {
                     target.makeKeyAndOrderFront(nil)
                     NSApp.hide(nil)
                     response = await until({ NSRunningApplication.current.isHidden }) ? "OK" : "FAIL"
+                case "@same-executable-accessory":
+                    accessory.executableURL = NSRunningApplication.current.executableURL
+                    accessory.arguments = ["--verify-app-activation", "--app-probe-accessory", String(getpid())]
+                    accessory.standardOutput = FileHandle.nullDevice
+                    try accessory.run()
+                    response = await until({
+                        guard let app = NSRunningApplication(processIdentifier: accessory.processIdentifier) else { return false }
+                        return app.activationPolicy == .accessory
+                            && app.executableURL == NSRunningApplication.current.executableURL
+                            && app.bundleURL == NSRunningApplication.current.bundleURL
+                    }) ? "OK" : "FAIL"
+                case "@stop-accessory":
+                    accessory.terminate()
+                    response = await until({ !accessory.isRunning }) ? "OK" : "FAIL"
                 case "@same-executable-instance":
                     secondInstance.executableURL = NSRunningApplication.current.executableURL
                     secondInstance.arguments = ["--verify-app-activation", "--app-probe-second-instance", String(getpid())]
@@ -252,7 +270,8 @@ enum AppActivationProbe {
         let descriptor = AppDescriptor(pid: Int(parentPID), bundleIdentifier: app.bundleIdentifier ?? "process:\(parentPID)", displayName: "Synthetic application fixture")
         let coreCandidate = CandidateFactory.makeApplicationCandidates(apps: [descriptor])[0]
         let candidate = Candidate(id: coreCandidate.id, groupID: coreCandidate.groupID, displayName: coreCandidate.displayName,
-                                  target: coreCandidate.target, processLaunchDate: app.launchDate)
+                                  target: coreCandidate.target, processLaunchDate: app.launchDate,
+                                  processStartTimestamp: ProcessStartTimestamp.read(pid: Int(parentPID)))
         let provider = RunningAppsProvider()
         let reader = ApplicationProbeLineReader(.standardInput)
         var failures = 0
@@ -291,6 +310,60 @@ enum AppActivationProbe {
             print(String(data: try! JSONSerialization.data(withJSONObject: record, options: .sortedKeys), encoding: .utf8)!)
         }
 
+        // WeChat's article browser has a regular UI process plus an accessory process
+        // using the same bundle AND executable. Select the existing UI by PID without
+        // sending an ambiguous bundle-level reopen to the other process.
+        print("@visible")
+        guard await reader.line() == "OK" else { return 2 }
+        print("@same-executable-accessory")
+        guard await reader.line() == "OK" else { return 2 }
+        overlay.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        guard await until({ NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() }) else { return 2 }
+        // The live browser does not expose a LaunchServices launchDate; use the kernel
+        // timestamp carried by real candidates, and prove stale instances remain rejected.
+        let browserCandidate = Candidate(id: candidate.id, groupID: candidate.groupID, displayName: candidate.displayName,
+                                         target: candidate.target, processStartTimestamp: candidate.processStartTimestamp)
+        let staleCandidate = Candidate(id: candidate.id, groupID: candidate.groupID, displayName: candidate.displayName,
+                                       target: candidate.target, processStartTimestamp: (candidate.processStartTimestamp ?? 0) + 1)
+        let staleResult = await provider.activate(staleCandidate)
+        let stalePassed = staleResult == .failure("这个应用已重新启动，请重新打开切换器。")
+            && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
+        if !stalePassed { failures += 1 }
+        print("\(stalePassed ? "PASS" : "FAIL") same-executable-accessory-stale-identity")
+        let accessoryResult = await provider.activate(browserCandidate)
+        print("@state")
+        guard let accessoryLine = await reader.line(), let accessoryData = accessoryLine.data(using: .utf8),
+              let accessoryState = (try? JSONSerialization.jsonObject(with: accessoryData)) as? [String: Any] else { return 2 }
+        let accessoryPassed = accessoryResult == .success
+            && NSWorkspace.shared.frontmostApplication?.processIdentifier == parentPID
+            && (accessoryState["visibleWindows"] as? Int ?? 0) > 0
+            && (accessoryState["reopenCallbacks"] as? Int) == 4
+        if !accessoryPassed { failures += 1 }
+        print("\(accessoryPassed ? "PASS" : "FAIL") same-executable-accessory: result=\(accessoryResult), selectedUIFrontmost=\(NSWorkspace.shared.frontmostApplication?.processIdentifier == parentPID), noAmbiguousReopen=\((accessoryState["reopenCallbacks"] as? Int) == 4)")
+        for scenario in ["hidden", "minimized", "closed"] {
+            print("@\(scenario)")
+            guard await reader.line() == "OK" else { return 2 }
+            overlay.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            guard await until({ NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() }) else { return 2 }
+            let result = await provider.activate(browserCandidate)
+            print("@state")
+            guard let line = await reader.line(), let data = line.data(using: .utf8),
+                  let state = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return 2 }
+            let visible = (state["visibleWindows"] as? Int ?? 0) > 0
+            let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == parentPID
+            // A PID-only success with no visible surface would bring back the old bug.
+            let correctResult = visible ? result == .success && frontmost
+                : result == .failure("未能显示这个应用的现有窗口。请尝试窗口模式，或先在原应用中打开窗口。")
+            let passed = correctResult && (state["reopenCallbacks"] as? Int) == 4
+                && (scenario != "hidden" || visible)
+            if !passed { failures += 1 }
+            print("\(passed ? "PASS" : "FAIL") same-executable-accessory-\(scenario): visible=\(visible) noAmbiguousReopen=\((state["reopenCallbacks"] as? Int) == 4)")
+        }
+        print("@stop-accessory")
+        guard await reader.line() == "OK" else { return 2 }
+
         // 真正的同安装路径、同主程序多实例仍须拒绝重开，不能靠过滤辅助进程放宽身份约束。
         print("@same-executable-instance")
         guard await reader.line() == "OK" else {
@@ -321,7 +394,7 @@ enum AppActivationProbe {
             "verdict": ambiguityPassed ? "PASS" : "FAIL_AMBIGUOUS_INSTANCE"
         ]
         print(String(data: try! JSONSerialization.data(withJSONObject: ambiguityRecord, options: .sortedKeys), encoding: .utf8)!)
-        print("RESULT failures=\(failures)/5; success requires exact foreground PID and visible window; ambiguous instances remain rejected")
+        print("RESULT failures=\(failures)/10; success requires exact foreground PID and visible window; ambiguous instances remain rejected")
         return failures == 0 ? 0 : 1
     }
 }

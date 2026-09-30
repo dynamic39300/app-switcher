@@ -12,7 +12,7 @@ enum OverlayPreview {
         let symbol: String
         let color: NSColor
         let count: Int
-        var groupID: String { "preview.\(key)" }
+        var groupID: String { key == "F" ? "com.apple.finder" : "preview.\(key)" }
     }
 
     private static let examples: [ExampleApp] = [
@@ -79,6 +79,11 @@ enum OverlayPreview {
                              mode: .applications, selectedKey: Key("S", letter: true), width: 760, height: 430, showsDragGuide: true))
         urls.append(try save("19-drag-guide-overflow", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
                              mode: .applications, selectedKey: Key("1", letter: false), width: 1040, height: 520, showsDragGuide: true))
+        urls.append(try save("20-quit-controls", directory: directory, style: style, keyMap: applications, icons: icons,
+                             mode: .applications, selectedKey: Key("S", letter: true), previewQuitControls: true))
+        urls.append(try save("21-quit-controls-overflow", directory: directory, style: style, keyMap: overflowMap(), icons: icons,
+                             mode: .applications, selectedKey: Key("1", letter: false), width: 1040, height: 520,
+                             previewQuitControls: true))
         return urls
     }
 
@@ -140,14 +145,16 @@ enum OverlayPreview {
     private static func save(_ name: String, directory: URL, style: OverlayStyle, keyMap: [Key: Candidate], icons: [String: NSImage],
                              mode: OverlayMode, selectedKey: Key? = nil, message: String? = nil,
                              width: CGFloat? = nil, isLoading: Bool = false, height: CGFloat? = nil,
-                             screenSize: CGSize = CGSize(width: 1440, height: 860), showsDragGuide: Bool = false) throws -> URL {
+                             screenSize: CGSize = CGSize(width: 1440, height: 860), showsDragGuide: Bool = false,
+                             previewQuitControls: Bool = false) throws -> URL {
         let preferred = OverlayView.preferredSize(in: screenSize)
         let size = CGSize(width: width ?? preferred.width, height: height ?? preferred.height)
         let view = OverlayView(keyMap: keyMap, icons: icons, mode: mode, selectedKey: selectedKey,
                                isLoading: isLoading, message: message, onSelect: { _ in }, onActivate: { _ in },
-                               onToggleMode: {}, onCancel: {}, onSettings: {},
+                               onToggleMode: {}, onCancel: {}, onSettings: {}, onQuit: { _ in },
                                style: style, onChangeStyle: { _ in }, onRemap: showsDragGuide ? { _, _, _ in false } : nil,
-                               showsDragGuide: showsDragGuide, onChangeDragGuide: { _ in })
+                               showsDragGuide: showsDragGuide, onChangeDragGuide: { _ in },
+                               previewQuitControls: previewQuitControls)
             .frame(width: size.width, height: size.height)
         let png: Data
         let minimumHeight: CGFloat = keyMap.keys.contains { !$0.isLetter } ? 720 : 604

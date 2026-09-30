@@ -21,5 +21,6 @@ upstream: [SPEC-002, DESIGN-002]
 | COMM-T06 | 实现与本地验收完成；正式分发待身份 | 正式构建配置、签名公证DMG、下载升级流程；12 | root；scripts/ | 10项发布边界测试、本地及commercial+Release隔离包与源码记录；缺Developer ID、公证及独立Mac实际下载安装升级 |
 | COMM-T07 | 本地验收完成；生产待环境 | 全链路联调、安全独立审阅、恢复与部署控制；全部AC/13 | root + 独立审阅 | PG 56/56、隔离恢复23表/14序列、双线审阅整改；Linux/远端CI/生产告警与恢复未验 |
 | COMM-T08 | backlog | 大陆付费用户验证与后续调整 | owner + Codex | 正式部署、支付、安装与关键兼容路径通过后 |
+| COMM-T09 | PKG 脚本与规格已补；正式制品和独立设备验收待外部身份 | 官网主下载改为双击运行的 Mac PKG；签名、公证、Gatekeeper、升级与独立设备安装；12 | Codex；scripts/、下载配置与发布文档 | Developer ID Application 和 Installer 两种证书、正式 HTTPS 服务、可用授权公钥；脚本静态和缺配置前置检查不等于已生成正式 PKG；现有 DMG 不满足双击安装目标 |
 
 现有 0.3.2 的 WorkBuddy 原始失败未复现及多屏/Space/权限完整矩阵仍按 FEAT-001 保留；不能在网站中承诺完全兼容所有应用。

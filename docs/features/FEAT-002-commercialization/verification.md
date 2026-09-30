@@ -82,3 +82,7 @@ upstream: [SPEC-002, CONTRACT-002, TASKS-002]
 尚需实际域名/HTTPS与云PostgreSQL、SMTP和客服/主体公开信息；Apple Developer/Developer ID及公证凭据；微信Native/支付宝电脑网站支付产品权限与受控配置。条件具备后执行每个开放渠道真实小额购买→权益同步→续费→退款→对账，以及独立Mac从正式下载入口安装/升级/权限/首次切换验收。正式域名变化需重新生成并固定客户端服务源/授权公钥。
 
 现有WorkBuddy原始失败未复现、第三方App/多屏/Space/全屏/性能完整矩阵沿用FEAT-001遗留。Windows、海外、自动扣款仍后置；20–30名首批用户及真实续费意愿属于上线后验证，未发生。
+
+## 2026-09-28 PKG 交付目标补充
+
+owner 再次明确官网注册登录、微信与支付宝两渠道、月季年主动付费，并要求另一台 Mac 可通过官网下载的安装包双击进入安装流程。新增 `scripts/release_macos_pkg.sh` 作为正式 PKG 候选入口；`productbuild --component /Applications/AppSwitcher.app /Applications <临时.pkg>` 与 `pkgutil --expand` 在本机实际完成，展开后含 `Distribution` 与 `com.appswitcher.app.pkg`，只证明封装结构，不证明安装或签名。`bash -n`、11 项 `scripts/test_app_bundle.py`、122 篇 Markdown 框架检查和 `git diff --check` 通过。以虚构测试服务源、公钥和身份运行脚本，配置校验通过，随后因钥匙串中没有 Developer ID Application 身份而以退出码 1 停止，未开始正式构建或公证。2026-09-28 对 `/Applications/AppSwitcher.app` 复查为 0.5.0、ad-hoc、无 Team ID；实际 Developer ID Application/Installer、正式服务、公证、PKG Gatekeeper 和独立 Mac 安装/升级仍未验证。本节只覆盖新增候选脚本，前述 2026-09-25/26 历史记录不改写为当前运行状态。

@@ -68,11 +68,19 @@ public final class RunningAppsProvider {
         if let expected = candidate.processLaunchDate, app.launchDate != expected {
             return .failure("这个应用已重新启动，请重新打开切换器。")
         }
+        if let expected = candidate.processStartTimestamp, ProcessStartTimestamp.read(pid: pid) != expected {
+            return .failure("这个应用已重新启动，请重新打开切换器。")
+        }
+        // Some embedded browsers run UI and accessory processes from the SAME executable.
+        // Bundle-level reopen cannot address one of them safely; the selected UI PID can.
+        let activateExistingWindows = !candidate.isWindow
+            && candidate.processStartTimestamp != nil
+            && hasSameExecutableAuxiliaryProcesses(app)
         guard !Task.isCancelled else { return .failure("切换已取消。") }
         if case .window(_, let token) = candidate.target {
             let preparation = await windowAccess.prepare(token: token, pid: pid)
             guard preparation == .success else { return preparation }
-        } else {
+        } else if !activateExistingWindows {
             let reopening = await reopenApplicationIfPossible(app)
             guard reopening == .success else { return reopening }
         }
@@ -80,7 +88,8 @@ public final class RunningAppsProvider {
         guard !candidate.isWindow || activationGeneration == snapshotGeneration else {
             return .failure("窗口列表已更新，请重新选择目标。")
         }
-        guard !app.isTerminated else {
+        guard !app.isTerminated,
+              candidate.processStartTimestamp.map({ ProcessStartTimestamp.read(pid: pid) == $0 }) ?? true else {
             return .failure("这个应用已退出，请重新打开切换器。")
         }
         NSApp.yieldActivation(to: app)
@@ -111,7 +120,7 @@ public final class RunningAppsProvider {
             let frontmostMatches = NSWorkspace.shared.frontmostApplication?.processIdentifier == nativePID
             switch candidate.target {
             case .application:
-                if frontmostMatches { return .success }
+                if frontmostMatches && (!activateExistingWindows || hasVisibleContentWindow(pid: nativePID)) { return .success }
             case .window(_, let token):
                 switch await windowAccess.focusState(token: token, pid: pid) {
                 case .focused:
@@ -126,9 +135,41 @@ public final class RunningAppsProvider {
             catch { return .failure("切换已取消。") }
         }
         if Task.isCancelled { return .failure("切换已取消。") }
+        if activateExistingWindows {
+            return .failure("未能显示这个应用的现有窗口。请尝试窗口模式，或先在原应用中打开窗口。")
+        }
         return candidate.isWindow
             ? .failure("未能确认目标窗口已获得焦点。请重试，或切到应用模式。")
             : .failure("未能确认应用已切到前台，请重试。")
+    }
+
+    /// Only one regular UI instance is eligible. Unknown executables or another regular
+    /// instance keep the conservative reopen rejection; this is not a bundle-name allowlist.
+    private func hasSameExecutableAuxiliaryProcesses(_ app: NSRunningApplication) -> Bool {
+        guard app.activationPolicy == .regular,
+              let bundle = app.bundleURL?.resolvingSymlinksInPath().standardizedFileURL,
+              let executable = app.executableURL?.resolvingSymlinksInPath().standardizedFileURL else { return false }
+        let peers = NSWorkspace.shared.runningApplications.filter {
+            !$0.isTerminated && $0.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == bundle
+        }
+        guard peers.allSatisfy({ $0.executableURL != nil }) else { return false }
+        let instances = peers.filter { $0.executableURL?.resolvingSymlinksInPath().standardizedFileURL == executable }
+        let regular = instances.filter { $0.activationPolicy == .regular }
+        return instances.count > 1 && regular.count == 1 && regular[0].processIdentifier == app.processIdentifier
+    }
+
+    /// Read only public window geometry/ownership; never read titles or capture pixels.
+    /// This verifies an App-level surface, not the identity of an individual browser tab.
+    private func hasVisibleContentWindow(pid: pid_t) -> Bool {
+        guard let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return false }
+        return rows.contains { row in
+            guard row[kCGWindowOwnerPID as String] as? Int == Int(pid),
+                  row[kCGWindowLayer as String] as? Int == 0,
+                  (row[kCGWindowAlpha as String] as? Double ?? 0) > 0.05,
+                  let bounds = row[kCGWindowBounds as String] as? [String: Any],
+                  let width = bounds["Width"] as? Double, let height = bounds["Height"] as? Double else { return false }
+            return width >= 100 && height >= 100
+        }
     }
 
     /// 应用入口采用 Dock/Finder 的重开语义，让应用自己恢复或重建其主窗口。
@@ -204,7 +245,8 @@ public final class RunningAppsProvider {
                 id: candidate.id, groupID: candidate.groupID, displayName: candidate.displayName,
                 title: candidate.title, activationCount: candidate.activationCount,
                 lastActivatedAt: candidate.lastActivatedAt, target: candidate.target,
-                windowCount: candidate.windowCount, processLaunchDate: dates[candidate.target.pid]
+                windowCount: candidate.windowCount, processLaunchDate: dates[candidate.target.pid],
+                processStartTimestamp: ProcessStartTimestamp.read(pid: candidate.target.pid)
             )
         }
     }

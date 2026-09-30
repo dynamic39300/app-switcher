@@ -11,7 +11,7 @@ uv run --frozen --project web python web/manage.py collectstatic --noinput
 uv run --frozen --project web python web/manage.py test commerce --noinput
 node --check web/static/app.js
 python3 scripts/test_app_bundle.py
-bash -n scripts/build_app.sh scripts/release_macos.sh
+bash -n scripts/build_app.sh scripts/release_macos.sh scripts/release_macos_pkg.sh
 swift build
 swift run CoreTests
 .build/debug/AppSwitcherApp --verify-commerce

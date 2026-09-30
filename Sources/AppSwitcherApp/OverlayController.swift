@@ -10,12 +10,16 @@ final class OverlayController {
     private let usage: UsageStore
     private let mappingStore: KeyMappingStore
     private let panel: OverlayPanel
+    private let quitService = AppQuitService()
+    private let quitNotice = QuitNoticePanel()
     private var mode: OverlayMode = .applications
     private var appCandidates: [Candidate] = []
     private var loadTask: Task<Void, Never>?
     private var cleanupTask: Task<Void, Never>?
     private var generation = 0
     private var isActivating = false
+    private var isQuitting = false
+    private var quitObservationTask: Task<Void, Never>?
     private var isLoading = false
     private var pendingMessage: String?
     var onSettings: (() -> Void)?
@@ -31,6 +35,7 @@ final class OverlayController {
         panel.onCancel = { [weak self] restore in self?.dismiss(restore: restore) }
         panel.onToggleMode = { [weak self] in self?.toggleMode() }
         panel.onSettings = { [weak self] in self?.onSettings?() }
+        panel.onQuit = { [weak self] key in self?.quitApplication(at: key) }
         panel.onRemap = { [weak self] from, to, id in self?.remap(from: from, to: to, candidateID: id) ?? false }
         panel.onResetBindings = { [weak self] group in self?.resetBindings(for: group) }
     }
@@ -65,6 +70,7 @@ final class OverlayController {
     }
 
     private func show(message: String? = nil, rememberPrevious: Bool = true) {
+        quitNotice.hide()
         generation += 1
         mode = .applications
         isLoading = false
@@ -155,7 +161,7 @@ final class OverlayController {
     }
 
     private func activate(_ key: Key) {
-        guard !isActivating, !isLoading, let candidate = panel.keyMap[key] else { return }
+        guard !isActivating, !isQuitting, !isLoading, let candidate = panel.keyMap[key] else { return }
         guard canBeginSwitch?() ?? true else {
             dismiss(restore: false)
             return
@@ -182,6 +188,57 @@ final class OverlayController {
                     pendingMessage = reason
                     appCandidates = []
                     SequenceHotKey.shared.suspended = false
+                }
+            }
+        }
+    }
+
+    private func quitApplication(at key: Key) {
+        guard panel.isVisible, mode == .applications, !isLoading, !isActivating, !isQuitting,
+              let candidate = panel.keyMap[key], !candidate.isWindow else { return }
+        isQuitting = true
+        quitObservationTask?.cancel()
+        dismiss(restore: false)
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await quitService.request(candidate)
+            isQuitting = false
+            SequenceHotKey.shared.suspended = false
+            switch result {
+            case .invalid(let message):
+                let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                if frontmost == ProcessInfo.processInfo.processIdentifier || frontmost.map(Int.init) == candidate.target.pid {
+                    show(message: message, rememberPrevious: false)
+                } else {
+                    quitNotice.show(message)
+                    pendingMessage = message
+                }
+            case .requested(let app):
+                let name = candidate.displayName
+                quitNotice.show("已请求退出「\(name)」。如出现保存提示，请在应用中处理。")
+                quitObservationTask = Task { [weak self] in
+                    guard let self else { return }
+                    let waitingDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+                    let finalDeadline = ContinuousClock.now.advanced(by: .seconds(30))
+                    var warned = false
+                    while !Task.isCancelled && ContinuousClock.now < finalDeadline {
+                        if app.isTerminated {
+                            quitNotice.show("已退出「\(name)」。", duration: .seconds(4))
+                            pendingMessage = nil
+                            return
+                        }
+                        if !warned && ContinuousClock.now >= waitingDeadline {
+                            warned = true
+                            let message = "「\(name)」尚未退出。请检查该应用的保存或退出提示。"
+                            quitNotice.show(message, onViewApplication: { [weak app] in
+                                guard let app, !app.isTerminated else { return }
+                                NSApp.yieldActivation(to: app)
+                                _ = app.activate(options: [])
+                            }, duration: .seconds(10))
+                            pendingMessage = message
+                        }
+                        try? await Task.sleep(for: .milliseconds(150))
+                    }
                 }
             }
         }

@@ -29,19 +29,32 @@ enum OverlayDragProbe {
                                 displayName: "合成测试 \(key.label)", target: .application(pid: -1)))
             })
             var activations: [Key] = []
+            var quitRequests: [Key] = []
             var settings = 0
             var toggles = 0
             panel.onKey = { activations.append($0) }
+            panel.onQuit = { quitRequests.append($0) }
             panel.onSettings = { settings += 1 }
             panel.onCancel = { _ in panel.hide(restorePrevious: false) }
             panel.onToggleMode = {
                 toggles += 1
                 panel.update(keyMap: map, mode: toggles % 2 == 0 ? .applications : .windows)
             }
+            guard await until({ NSRunningApplication.current.isFinishedLaunching }) else {
+                throw Failure(message: "synthetic probe app did not finish launching")
+            }
             panel.show(keyMap: map)
             await settle()
-            guard let window = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) else {
+            var visiblePanel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible })
+            for _ in 0..<20 where visiblePanel == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+                visiblePanel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible })
+            }
+            guard let window = visiblePanel else {
                 throw Failure(message: "synthetic panel missing")
+            }
+            guard await until({ window.isKeyWindow && NSApp.isActive }) else {
+                throw Failure(message: "synthetic panel did not become active")
             }
             let start = window.frame
             try await drag(window, from: CGPoint(x: start.midX, y: start.maxY - 12),
@@ -71,6 +84,17 @@ enum OverlayDragProbe {
             try require(window.frame != beforeFooter, "footer background allows dragging")
             try require(activations.isEmpty, "dragging never activates a candidate")
 
+            panel.update(keyMap: map, mode: .applications)
+            await settle()
+            let quitKeyWidth = (window.frame.width - 40 - 9 * OverlayTheme.keyGap) / 10
+            let quitPoint = CGPoint(x: window.frame.minX + 20 + quitKeyWidth - 22,
+                                    y: window.frame.maxY - 96)
+            postMouse(.mouseMoved, at: quitPoint)
+            await settle()
+            try await click(window, at: quitPoint)
+            try require(quitRequests == [q] && activations.isEmpty,
+                        "application X requests quit once without activating the card")
+
             // Q is the first populated key in the three-row synthetic keyboard.
             try await click(window, at: CGPoint(x: window.frame.minX + 52, y: window.frame.maxY - 130))
             try require(activations == [q], "candidate click still selects exactly its target")
@@ -80,10 +104,20 @@ enum OverlayDragProbe {
             let frameBeforeTab = window.frame
             try await key(48, window: window)
             try require(toggles == 1 && window.frame == frameBeforeTab, "Tab switches mode without recentering")
-            try await click(window, at: CGPoint(x: window.frame.maxX - 203, y: window.frame.maxY - 41))
+            let quitCountInWindowMode = quitRequests.count
+            postMouse(.mouseMoved, at: quitPoint)
+            await settle()
+            try await click(window, at: quitPoint)
+            try require(quitRequests.count == quitCountInWindowMode,
+                        "window mode never sends an application quit request")
+            try await click(window, at: CGPoint(x: window.frame.maxX - 225, y: window.frame.maxY - 41))
             try require(toggles == 2, "mode button remains clickable")
             try await click(window, at: CGPoint(x: window.frame.maxX - 73, y: window.frame.maxY - 41))
             try require(settings == 1, "settings button remains clickable")
+            try await key(43, window: window, modifiers: .maskCommand)
+            try require(settings == 2, "Command-comma opens the same settings action")
+            postMouse(.mouseMoved, at: CGPoint(x: window.frame.minX + 160, y: window.frame.maxY - 42))
+            await settle()
 
             let beforeThemes = window.frame
             let previousActivations = activations
@@ -105,7 +139,7 @@ enum OverlayDragProbe {
             try await key(18, window: window, modifiers: .maskCommand)
             try require(panel.style == .graphite, "Command-1 switches back to graphite")
             // Theme strip sits immediately left of the unchanged mode controls.
-            try await click(window, at: CGPoint(x: window.frame.maxX - 284, y: window.frame.maxY - 41))
+            try await click(window, at: CGPoint(x: window.frame.maxX - 320, y: window.frame.maxY - 41))
             try require(panel.style == .smoke && window.frame == beforeThemes, "theme button click changes style without dragging")
             panel.changeStyle(.graphite)
 
@@ -169,6 +203,15 @@ enum OverlayDragProbe {
     }
 
     private static func settle() async { try? await Task.sleep(for: .milliseconds(250)) }
+
+    private static func until(_ predicate: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !predicate() {
+            guard ContinuousClock.now < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return true
+    }
 
     private static func validate(_ window: NSWindow, at point: CGPoint? = nil) throws {
         guard window.isVisible, window.isKeyWindow, NSApp.isActive,

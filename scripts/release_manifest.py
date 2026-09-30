@@ -79,7 +79,7 @@ def finalize_build(provenance, executable):
     provenance.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
 
 
-def artifact(dmg, receipt, provenance, destination):
+def artifact(package, receipt, provenance, destination):
     notary = json.loads(receipt.read_text())
     build = json.loads(provenance.read_text())
     if notary.get("status") != "Accepted":
@@ -90,13 +90,13 @@ def artifact(dmg, receipt, provenance, destination):
     ):
         raise ValueError("Missing measured distribution build provenance")
     digest = hashlib.sha256()
-    with dmg.open("rb") as stream:
+    with package.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     result = {
         "product": "AppSwitcher",
         "version": build["version"],
-        "file": dmg.name,
+        "file": package.name,
         "sha256": digest.hexdigest(),
         "architecture": build["architectures"][0],
         "minimumOS": "15.0",
@@ -118,7 +118,7 @@ def main():
     p.add_argument("provenance", type=Path)
     p.add_argument("executable", type=Path)
     p = commands.add_parser("artifact")
-    for name in ("dmg", "receipt", "provenance", "destination"):
+    for name in ("package", "receipt", "provenance", "destination"):
         p.add_argument(name, type=Path)
     args = parser.parse_args()
     try:
@@ -127,7 +127,7 @@ def main():
         elif args.command == "verify":
             finalize_build(args.provenance, args.executable)
         else:
-            artifact(args.dmg, args.receipt, args.provenance, args.destination)
+            artifact(args.package, args.receipt, args.provenance, args.destination)
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         parser.exit(1, str(exc) + "\n")
 

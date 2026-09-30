@@ -13,6 +13,17 @@ MainActor.assumeIsolated {
         exit(0)
     }
 
+    if CommandLine.arguments.contains("--quit-probe-fixture") {
+        AppQuitProbe.startFixture()
+        app.run()
+        exit(0)
+    }
+    if CommandLine.arguments.contains("--verify-app-quit") {
+        Task { @MainActor in exit(Int32(await AppQuitProbe.run())) }
+        app.run()
+        exit(1)
+    }
+
     #if !DEBUG
     if CommandLine.arguments.contains("--verify-commerce-api") || CommandLine.arguments.contains("--render-commerce-preview") {
         fputs("This isolated development command is unavailable in release builds.\n", stderr)
