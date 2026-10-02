@@ -64,11 +64,11 @@ struct OverlayPalette {
     let style: OverlayStyle
     private var light: Bool { style == .porcelain }
     private var glass: Bool { style == .smoke }
-    var background: Color { color(light ? 0xDADDDF : (glass ? 0x192C33 : 0x20252E)) }
-    var panelTop: Color { color(light ? 0xF8F9FA : (glass ? 0x345661 : 0x343B46)) }
-    var surface: Color { color(light ? 0xECEEF0 : (glass ? 0x24404C : 0x343B46)) }
-    var surfaceHover: Color { color(light ? 0xD4DEE7 : (glass ? 0x365D6A : 0x414853)) }
-    var surfaceSelected: Color { color(light ? 0xC2DDF3 : (glass ? 0x315566 : 0x304A61)) }
+    var background: Color { color(light ? 0xDADDDF : (glass ? 0x192C33 : 0x202429)) }
+    var panelTop: Color { color(light ? 0xF8F9FA : (glass ? 0x345661 : 0x262B30)) }
+    var surface: Color { color(light ? 0xECEEF0 : (glass ? 0x24404C : 0x31363D)) }
+    var surfaceHover: Color { color(light ? 0xD4DEE7 : (glass ? 0x365D6A : 0x3B4249)) }
+    var surfaceSelected: Color { color(light ? 0xC2DDF3 : (glass ? 0x315566 : 0x364754)) }
     var topEdge: Color { Color.white.opacity(light ? 0.95 : (glass ? 0.5 : 0.32)) }
     var base: Color { color(light ? 0xA2AAB4 : (glass ? 0x102C38 : 0x11151B)) }
     var emptySurface: Color { surface.opacity(light ? 0.55 : 0.3) }
@@ -76,12 +76,13 @@ struct OverlayPalette {
     var secondaryText: Color { color(light ? 0x526171 : (glass ? 0xAFC3CA : 0xB3BDC9)) }
     var mutedText: Color { secondaryText.opacity(0.7) }
     var border: Color { (light ? Color.black : Color.white).opacity(light ? 0.18 : 0.15) }
-    var primary: Color { color(light ? 0x326693 : 0x9CCFFF) }
+    var primary: Color { color(light ? 0x326693 : (glass ? 0x9CCFFF : 0xADC5D6)) }
     var warning: Color { color(light ? 0x8A420C : 0xFFC36B) }
     var strongBorder: Color { text.opacity(0.65) }
     var panelGradient: LinearGradient { LinearGradient(colors: [panelTop, background], startPoint: .topLeading, endPoint: .bottomTrailing) }
-    func keyGradient(selected: Bool) -> LinearGradient {
-        LinearGradient(colors: [selected ? surfaceSelected : surface, selected ? surfaceSelected : surface, selected ? surfaceHover : surfaceHover.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+    func keyGradient(selected: Bool, hovered: Bool) -> LinearGradient {
+        let face = selected ? surfaceSelected : (hovered ? surfaceHover : surface)
+        return LinearGradient(colors: [face, face, face.opacity(style == .graphite ? 0.96 : 0.9)], startPoint: .top, endPoint: .bottom)
     }
     private func color(_ hex: UInt32) -> Color {
         Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
@@ -91,6 +92,7 @@ struct OverlayPalette {
 struct MaterialKeycapStyle: ButtonStyle {
     let style: OverlayStyle
     let selected: Bool
+    var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -98,7 +100,7 @@ struct MaterialKeycapStyle: ButtonStyle {
         let palette = OverlayPalette(style: style)
         let shape = RoundedRectangle(cornerRadius: OverlayTheme.keyRadius, style: .continuous)
         configuration.label
-            .background(palette.keyGradient(selected: selected), in: shape)
+            .background(palette.keyGradient(selected: selected, hovered: hovered), in: shape)
             .overlay {
                 shape.strokeBorder(LinearGradient(colors: [palette.topEdge, palette.border], startPoint: .top, endPoint: .bottom), lineWidth: 1)
             }
@@ -110,12 +112,13 @@ struct MaterialKeycapStyle: ButtonStyle {
             .padding(.bottom, 7)
             .background(palette.base, in: shape)
             .overlay {
-                shape.strokeBorder(selected || configuration.isPressed ? palette.primary : (contrast == .increased ? palette.strongBorder : palette.border), lineWidth: selected || configuration.isPressed ? 1.5 : 1)
+                shape.strokeBorder(selected || configuration.isPressed ? palette.primary : (contrast == .increased ? palette.strongBorder : (hovered ? palette.secondaryText.opacity(0.55) : palette.border)), lineWidth: selected || configuration.isPressed ? 1.5 : 1)
             }
             .overlay(alignment: .bottom) {
                 if selected { Capsule().fill(palette.primary).frame(width: 14, height: 2).padding(.bottom, 2).accessibilityHidden(true) }
             }
             .contentShape(shape)
+            .animation(reduceMotion ? nil : .easeOut(duration: OverlayTheme.hoverDuration), value: hovered)
             .animation(reduceMotion ? nil : .easeOut(duration: configuration.isPressed ? 0.06 : 0.15), value: configuration.isPressed)
     }
 }

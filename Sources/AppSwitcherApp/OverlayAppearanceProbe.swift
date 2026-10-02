@@ -38,6 +38,15 @@ enum OverlayAppearanceProbe {
             try require(OverlayStyle.porcelain.detailPlacement(in: CGSize(width: 1300, height: 700), hasNumberRow: true) == .top, "porcelain uses top detail")
             try require(OverlayStyle.smoke.detailPlacement(in: CGSize(width: 1300, height: 700), hasNumberRow: true) == .side, "smoke uses side detail on wide screens")
             try require(OverlayStyle.smoke.detailPlacement(in: CGSize(width: 1100, height: 500), hasNumberRow: true) == .none, "38-key medium width does not squeeze keys for sidebar")
+            let regular = OverlayView.preferredSize(in: CGSize(width: 1440, height: 900))
+            let crowded = OverlayView.preferredSize(in: CGSize(width: 1440, height: 900), hasNumberRow: true)
+            let wide = OverlayView.preferredSize(in: CGSize(width: 2560, height: 1440))
+            try require(regular.height < 650 && crowded.height > regular.height && wide.width <= OverlayTheme.maximumPanelWidth,
+                        "keyboard content determines compact panel size and caps ultrawide width")
+            let regularKeyWidth = (regular.width - OverlayTheme.panelPadding * 2 - 9 * OverlayTheme.keyGap) / 10
+            let regularKeyHeight = (regular.height - OverlayTheme.panelChromeHeight - 2 * OverlayTheme.keyGap) / 3
+            try require(regularKeyHeight / regularKeyWidth <= 1.08,
+                        "regular keycaps stay close to square on a common display")
             let keyboard = CGRect(x: 20, y: 106, width: 1290, height: 580)
             var viewport = KeyViewportPreference.defaultValue
             KeyViewportPreference.reduce(value: &viewport) { keyboard }

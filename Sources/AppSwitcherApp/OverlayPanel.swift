@@ -178,7 +178,7 @@ final class OverlayPanel {
     private func sizeToScreen() {
         guard let screen = presentationScreen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let size = OverlayView.preferredSize(in: visible.size)
+        let size = OverlayView.preferredSize(in: visible.size, hasNumberRow: keyMap.keys.contains { !$0.isLetter })
         panel.setFrame(NSRect(
             x: visible.midX - size.width / 2,
             y: visible.midY - size.height / 2,
@@ -192,7 +192,8 @@ final class OverlayPanel {
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
             ?? panel.screen else { return }
         presentationScreen = screen
-        panel.setFrame(OverlayPlacement.fittedFrame(panel.frame, in: screen.visibleFrame), display: true)
+        panel.setFrame(OverlayPlacement.fittedFrame(panel.frame, in: screen.visibleFrame,
+                                                   hasNumberRow: keyMap.keys.contains { !$0.isLetter }), display: true)
     }
 
     private func installEventMonitors() {

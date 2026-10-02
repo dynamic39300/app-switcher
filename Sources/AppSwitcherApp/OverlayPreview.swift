@@ -147,7 +147,8 @@ enum OverlayPreview {
                              width: CGFloat? = nil, isLoading: Bool = false, height: CGFloat? = nil,
                              screenSize: CGSize = CGSize(width: 1440, height: 860), showsDragGuide: Bool = false,
                              previewQuitControls: Bool = false) throws -> URL {
-        let preferred = OverlayView.preferredSize(in: screenSize)
+        let previewScreen = width.map { CGSize(width: $0 / OverlayTheme.panelWidthFraction, height: screenSize.height) } ?? screenSize
+        let preferred = OverlayView.preferredSize(in: previewScreen, hasNumberRow: keyMap.keys.contains { !$0.isLetter })
         let size = CGSize(width: width ?? preferred.width, height: height ?? preferred.height)
         let view = OverlayView(keyMap: keyMap, icons: icons, mode: mode, selectedKey: selectedKey,
                                isLoading: isLoading, message: message, onSelect: { _ in }, onActivate: { _ in },

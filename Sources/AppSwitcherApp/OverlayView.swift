@@ -53,6 +53,7 @@ struct OverlayView: View {
     @State private var guideStopped = false
     @State private var lastGuideRevision: Int?
     @State private var confirmsReset = false
+    @State private var hoveredKey: Key?
     @State private var hoveredQuitKey: Key?
     @AccessibilityFocusState private var accessibilityFocusedQuitKey: Key?
     @Namespace private var keyMotion
@@ -70,11 +71,19 @@ struct OverlayView: View {
         return key(at: draggedKey.location)
     }
 
-    static func preferredSize(in availableSize: CGSize) -> CGSize {
-        CGSize(
-            width: max(1, min(availableSize.width * OverlayTheme.panelWidthFraction, availableSize.width - OverlayTheme.screenInset * 2)),
-            height: max(1, min(availableSize.height * OverlayTheme.panelHeightFraction, availableSize.height - OverlayTheme.screenInset * 2))
-        )
+    static func preferredSize(in availableSize: CGSize, hasNumberRow: Bool = false) -> CGSize {
+        let width = max(1, min(availableSize.width * OverlayTheme.panelWidthFraction,
+                               availableSize.width - OverlayTheme.screenInset * 2,
+                               OverlayTheme.maximumPanelWidth))
+        let columns = CGFloat(hasNumberRow ? 12 : 10)
+        let rows: CGFloat = hasNumberRow ? 4 : 3
+        let keyboardWidth = max(1, width - OverlayTheme.panelPadding * 2)
+        let keyWidth = max(1, (keyboardWidth - (columns - 1) * OverlayTheme.keyGap) / columns)
+        let keyHeight = max(OverlayTheme.minimumKeyHeight, keyWidth * OverlayTheme.maximumKeyAspectRatio)
+        let contentHeight = rows * keyHeight + (rows - 1) * OverlayTheme.keyGap + OverlayTheme.panelChromeHeight
+        return CGSize(width: width, height: max(1, min(availableSize.height * OverlayTheme.panelHeightFraction,
+                                                     availableSize.height - OverlayTheme.screenInset * 2,
+                                                     contentHeight)))
     }
 
     var body: some View {
@@ -132,8 +141,8 @@ struct OverlayView: View {
         .onChange(of: keyViewport) { _, _ in if guide != nil { stopGuide() } }
         .onChange(of: keyFrames) { _, _ in if guide != nil { stopGuide() } }
         .onChange(of: style) { _, _ in stopGuide(); cancelDrag() }
-        .onChange(of: mode) { _, _ in stopGuide(); cancelDrag(); hoveredQuitKey = nil }
-        .onDisappear { cancelDrag(); stopGuide() }
+        .onChange(of: mode) { _, _ in stopGuide(); cancelDrag(); hoveredKey = nil; hoveredQuitKey = nil }
+        .onDisappear { cancelDrag(); stopGuide(); hoveredKey = nil }
         .task(id: KeyGuideRequest(enabled: showsDragGuide, revision: guideRevision, mode: mode)) { await playGuide() }
         .task(id: landingKey) {
             guard landingKey != nil else { return }
@@ -277,7 +286,7 @@ struct OverlayView: View {
 
     private var headerSubtitle: String {
         if isLoading { return "正在读取可用\(mode.title)…" }
-        if mode == .applications { return "切换应用 · \(keyMap.count) 个应用" }
+        if mode == .applications { return "\(keyMap.count) 个应用" }
         let windows = keyMap.values.filter(\.isWindow).count
         let applications = keyMap.count - windows
         if applications == 0 { return "切换窗口 · \(windows) 个窗口" }
@@ -306,18 +315,21 @@ struct OverlayView: View {
     @ViewBuilder
     private func keyboardRegion(size: CGSize) -> some View {
         let rowCount = CGFloat(rows.count)
+        let columns = CGFloat(hasNumberRow ? 12 : 10)
+        let keyWidth = max(1, (size.width - (columns - 1) * OverlayTheme.keyGap) / columns)
+        let minimumHeight = max(OverlayTheme.minimumKeyHeight, keyWidth)
         let rowHeight = (size.height - (rowCount - 1) * OverlayTheme.keyGap) / rowCount
-        if rowHeight < OverlayTheme.minimumKeyHeight {
+        if rowHeight < minimumHeight {
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
-                    keyboard(width: size.width, keyHeight: OverlayTheme.minimumKeyHeight)
+                    keyboard(width: size.width, keyHeight: minimumHeight)
                 }
                 .scrollIndicators(.visible)
                 .onAppear { revealSelection(using: proxy) }
                 .onChange(of: selectedKey) { _, _ in revealSelection(using: proxy) }
             }
         } else {
-            keyboard(width: size.width, keyHeight: rowHeight)
+            keyboard(width: size.width, keyHeight: min(rowHeight, keyWidth * OverlayTheme.maximumKeyAspectRatio))
         }
     }
 
@@ -370,7 +382,8 @@ struct OverlayView: View {
                 Button { if draggedKey == nil { stopGuide(); onActivate(key) } } label: {
                     populatedKeycap(key, candidate: candidate, width: max(1, width - 8), height: max(1, height - 10))
                 }
-                .buttonStyle(MaterialKeycapStyle(style: style, selected: selectedKey == key))
+                .buttonStyle(MaterialKeycapStyle(style: style, selected: selectedKey == key, hovered: hoveredKey == key))
+                .onHover { hovering in hoveredKey = hovering ? key : (hoveredKey == key ? nil : hoveredKey) }
                 .disabled(isLoading)
                 .opacity(draggedKey?.source == key ? 0.3 : 1)
                 .highPriorityGesture(keyDrag(from: key, candidate: candidate), including: canRemap ? .all : .none)
@@ -446,13 +459,14 @@ struct OverlayView: View {
 
     private func populatedKeycap(_ key: Key, candidate: Candidate, width: CGFloat, height: CGFloat) -> some View {
         let isSelected = selectedKey == key
+        let compactContent = width < 85 || height < 105
         let nameSize = max(11, min(16, width * 0.105, height * 0.105))
         let detailSize = max(10, min(12, nameSize - 1))
         let spacing: CGFloat = height > 140 ? 8 : 3
         // 先为两行名称、窗口说明留位，剩余空间再用于图标；不再按固定 64pt 封顶。
-        let detailHeight = candidate.isWindow ? detailSize * 2.5 : (mode == .windows ? detailSize * 1.25 : 0)
-        let textHeight = nameSize * 2.5 + detailHeight + spacing * (detailHeight > 0 ? 2 : 1)
-        let topReserve: CGFloat = 8
+        let detailHeight = compactContent ? 0 : (candidate.isWindow ? detailSize * 2.5 : (mode == .windows ? detailSize * 1.25 : 0))
+        let textHeight = nameSize * (compactContent ? 1.4 : 2.5) + detailHeight + spacing * (detailHeight > 0 ? 2 : 1)
+        let topReserve: CGFloat = compactContent ? 4 : 8
         let preferredIconSize = max(18, min(width * 0.68, height * 0.52, height - 16 - textHeight))
         let inlineKeyLabel = width < 70 || (height - preferredIconSize - textHeight) / 2 < keyLabelSize(width: width) + 20
         let keyLabelWidth = ceil(keyLabelSize(width: width) * 0.75)
@@ -474,10 +488,12 @@ struct OverlayView: View {
                 .font(.system(size: nameSize, weight: .medium))
                 .foregroundStyle(palette.text)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
+                .lineLimit(compactContent ? 1 : 2)
+                .truncationMode(.tail)
+                .minimumScaleFactor(compactContent ? 0.85 : 1)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
-            if candidate.isWindow {
+            if candidate.isWindow && !compactContent {
                 Text(candidate.title)
                     .font(.system(size: detailSize))
                     .foregroundStyle(palette.secondaryText)
@@ -486,7 +502,7 @@ struct OverlayView: View {
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
-            } else if mode == .windows {
+            } else if mode == .windows && !compactContent {
                 Text("应用入口")
                     .font(.system(size: detailSize))
                     .foregroundStyle(palette.secondaryText)
@@ -495,7 +511,7 @@ struct OverlayView: View {
         }
         .padding(.horizontal, 7)
         .padding(.top, topReserve)
-        .padding(.bottom, 8)
+        .padding(.bottom, compactContent ? 4 : 8)
         .frame(width: width, height: height)
         .overlay(alignment: mode == .applications ? .topLeading : .topTrailing) {
             if !inlineKeyLabel {
@@ -686,12 +702,9 @@ struct OverlayView: View {
                         .foregroundStyle(palette.text)
                         .lineLimit(2)
                     Spacer(minLength: 8)
-                    Text(candidate.isWindow ? "切换到此窗口" : "切换到应用")
-                        .foregroundStyle(palette.secondaryText)
-                        .fixedSize()
                 } else {
                     Text(keyMap.isEmpty ? (isLoading ? "可随时按 Esc 关闭" : "打开应用后再次唤出")
-                         : (mode == .applications ? "按键或点击应用，即刻切换" : "可定位的窗口独立显示，其余保留应用入口"))
+                         : (mode == .applications ? "按键或点按切换应用" : "窗口可单独选择，其余保留应用入口"))
                         .foregroundStyle(palette.secondaryText)
                 }
                 Spacer(minLength: 0)

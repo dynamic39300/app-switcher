@@ -42,3 +42,18 @@ RESULT failures=1/6
 - 回退：先退出当前 AppSwitcher，将当前包移至备份位置，再将上述 0.5.1 备份复制回 `/Applications/AppSwitcher.app` 并启动。不要删除用户配置。本轮未执行回退演练。
 
 复测：保持微信文章浏览器窗口打开，唤起键盘面板，点击 5 号微信浏览器图标主体（非右上角退出叉）；预期面板收起且文章窗口前置。若文章窗口已关闭或全部最小化，先恢复窗口后测试本次修复的场景。
+
+## 2026-10-01 重新打包与安装
+
+- 源提交：`6e117ff00b14226c254881a717b3785c7cc3f90f`；版本仍为 0.5.2，本轮没有新增功能代码。4 个与原文件逐字节一致的 `Sources/**/* 2.swift` 副本已移至下述备份目录的 `source-duplicates/`，其他未跟踪文档副本保留。
+- 旧缓存引用 `/Users/wangxinlei` 导致首轮编译失败；执行 `swift package clean` 后，`scripts/build_app.sh` Release/local 构建、branding 与严格签名验证通过。arm64，ad-hoc 签名，未公证。
+- 安装包：`~/Downloads/AppSwitcher-0.5.2-local-test-20261001.dmg`；由 `scripts/package_local_preview.sh` 生成并通过 `hdiutil verify`。SHA-256：`1ac63dde56d2f3824c6f0b695b08ce4becc857d09f462bfef78ff90ab8f3156e`。
+- `swift run -c release CoreTests`：112/112；候选包 `--verify-app-activation` 首轮在 hidden 场景发生焦点/回调失败，退出码 2；随后单独复跑 10/10。首轮波动原因未确定，不把复跑通过视为真实微信文章页验收。
+- 从上述 DMG 实际挂载提取至 `/Applications/AppSwitcher.app`，验证签名后卸载镜像；旧应用移至 `~/Library/Application Support/AppSwitcher/InstallBackups/20261001-repackage/Previous-AppSwitcher.app`。替换前旧应用未运行。
+- 安装后二进制 SHA-256：`8d51a4b9c234d0c4fd94d5e25729c0cf77139a174f9d08088dc5919e51dd03b5`；启动 PID 10187，日志确认辅助功能授权有效、快捷键注册成功。4 个顶层 JSON 配置在替换前后摘要一致，备份目录保留配置副本及 installation.json/startup.log。
+- 下一步实测：打开微信文章页 → 用原快捷键唤起 → 点击微信浏览器卡片，确认文章置前、覆盖层消失且不回闪；再测试普通微信和其他应用。实际第三方页面切换仍待用户验证。
+- 回退：正常退出当前 AppSwitcher，将当前应用移至另一备份位置，再将上述 Previous-AppSwitcher.app 复制回 `/Applications/AppSwitcher.app` 并启动；无需删除个人配置。
+
+## 2026-10-01 旧包清理
+
+应 owner 要求，将 23 个旧应用副本和历史 DMG 从 `~/Downloads`、AppSwitcher 的 `BuildCandidates/`、`InstallBackups/`、`backups/` 及项目 `build/` 移至 `~/.Trash/AppSwitcher-old-packages-20261001/`；原路径与废纸篓路径记录在该目录的 `manifest.json`。本节上方的旧版回退路径已失效；如需回退，须先从废纸篓恢复相应副本。当前 `/Applications/AppSwitcher.app`、`~/Downloads/AppSwitcher-0.5.2-local-test-20261001.dmg`、同版最新构建候选及个人 JSON 配置保留。

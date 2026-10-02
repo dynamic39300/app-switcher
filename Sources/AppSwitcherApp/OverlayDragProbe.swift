@@ -124,8 +124,10 @@ enum OverlayDragProbe {
             for style in OverlayStyle.allCases {
                 panel.changeStyle(style)
                 await settle()
-                try require(panel.style == style && panel.keyMap == map && window.frame == beforeThemes,
-                            "\(style.rawValue) preserves mapping and frame")
+                guard panel.style == style && panel.keyMap == map && window.frame == beforeThemes else {
+                    throw Failure(message: "\(style.rawValue) changed style, mapping or frame (style=\(panel.style.rawValue), map=\(panel.keyMap == map), frame=\(window.frame), expected=\(beforeThemes))")
+                }
+                print("PASS overlay-drag: \(style.rawValue) preserves mapping and frame")
                 try await key(36, window: window)
                 try require(activations.last == w, "\(style.rawValue) preserves selected target for Enter")
                 try require(OverlayAppearanceStore(url: appearance.url).style == style, "\(style.rawValue) survives preference reload")
@@ -186,9 +188,13 @@ enum OverlayDragProbe {
 
     private static func verifyPlacement() throws {
         let desktop = CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let unchanged = CGRect(x: 100, y: 100, width: 900, height: 600)
+        let unchanged = CGRect(x: 100, y: 100, width: 900, height: 500)
         try require(OverlayPlacement.fittedFrame(unchanged, in: desktop) == unchanged,
                     "in-bounds local moves retain position and size")
+        let oversized = CGRect(x: 100, y: 100, width: 900, height: 600)
+        try require(OverlayPlacement.fittedFrame(oversized, in: desktop).height
+                        <= OverlayView.preferredSize(in: desktop.size).height + 1,
+                    "oversized local panel shrinks to the new compact height")
         for visible in [desktop, CGRect(x: -1280, y: -200, width: 1280, height: 720),
                         CGRect(x: 1512, y: -458, width: 2560, height: 1440),
                         CGRect(x: 0, y: 1000, width: 760, height: 430)] {
@@ -216,7 +222,7 @@ enum OverlayDragProbe {
     private static func validate(_ window: NSWindow, at point: CGPoint? = nil) throws {
         guard window.isVisible, window.isKeyWindow, NSApp.isActive,
               point.map({ window.frame.contains($0) }) ?? true else {
-            throw Failure(message: "synthetic panel lost focus or pointer target; stopping input")
+            throw Failure(message: "synthetic panel lost focus or pointer target; visible=\(window.isVisible), key=\(window.isKeyWindow), active=\(NSApp.isActive), point=\(String(describing: point)), frame=\(window.frame)")
         }
     }
 

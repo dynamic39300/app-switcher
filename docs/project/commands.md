@@ -1,8 +1,12 @@
 # 命令索引
 
-## 0.5.2 微信文章浏览器修复（2026-09-30，当前本机版）
+## 0.5.3 键盘面板调整（2026-10-02，当前本机版）
 
-当前安装 `/Applications/AppSwitcher.app`，0.5.2 Release/local，保留个人设置。`--verify-app-activation` 现为 10 项，新增同可执行文件 accessory 共存及内核启动标识回归。Debug 与候选 Release 10/10，CoreTests 112/112；精确窗口探针在新旧版本均有焦点断言失败，真实文章页最终复测待 owner。构建、安装、摘要、回退和验证边界见[0.5.2 交付](../features/FEAT-001-app-switcher/wechat-browser-fix-0.5.2.md)。下列 0.5.1 及更早记录为历史。
+当前安装 `/Applications/AppSwitcher.app`，0.5.3 Release/local；配置保持。`swift run -c release CoreTests` 112/112，最终候选的 `--verify-appearance` 与 `--verify-overlay-drag` 通过；三主题合成预览已生成并目视检查。真实面板观感与微信文章页切换待 owner 体验，详细制品、检查与回退见[0.5.3 交付](../features/FEAT-001-app-switcher/ui-keyboard-refinement-0.5.3.md)。以下 0.5.2 及更早记录为历史。
+
+## 0.5.2 微信文章浏览器修复（2026-09-30，历史）
+
+当时安装 `/Applications/AppSwitcher.app`，0.5.2 Release/local，保留个人设置。`--verify-app-activation` 现为 10 项，新增同可执行文件 accessory 共存及内核启动标识回归。Debug 与候选 Release 10/10，CoreTests 112/112；精确窗口探针在新旧版本均有焦点断言失败，真实文章页最终复测待 owner。构建、安装、摘要、回退和验证边界见[0.5.2 交付](../features/FEAT-001-app-switcher/wechat-browser-fix-0.5.2.md)。下列 0.5.1 及更早记录为历史。
 
 ## 当前：0.5.1 本机测试版已安装运行（2026-09-28）
 
